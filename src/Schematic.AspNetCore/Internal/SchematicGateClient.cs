@@ -12,11 +12,14 @@ internal sealed class SchematicGateClient : ISchematicGateClient
         _client = client;
     }
 
+    // The SDK method does not accept a CancellationToken; WaitAsync at least stops awaiting
+    // (e.g. when the request is aborted) even though the underlying call runs to completion.
     public Task<CheckFlagWithEntitlementResponse> CheckFlagWithEntitlementAsync(
         string flagKey,
         Dictionary<string, string> company,
-        Dictionary<string, string> user)
-        => _client.CheckFlagWithEntitlement(flagKey, company, user);
+        Dictionary<string, string> user,
+        CancellationToken cancellationToken)
+        => _client.CheckFlagWithEntitlement(flagKey, company, user).WaitAsync(cancellationToken);
 
     public void Track(
         string eventName,

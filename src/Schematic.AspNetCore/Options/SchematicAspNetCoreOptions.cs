@@ -17,4 +17,10 @@ public sealed class SchematicAspNetCoreOptions
     /// ProblemDetails implementation. The delegate is responsible for writing a complete response.
     /// </summary>
     public Func<HttpContext, SchematicDenialContext, Task>? OnDenied { get; set; }
+
+    /// <summary>
+    /// How the gate filter responds when the entitlement check throws (network/SDK error).
+    /// Defaults to <see cref="SchematicFailurePolicy.FailClosed"/> (503).
+    /// </summary>
+    public SchematicFailurePolicy FailurePolicy { get; set; } = SchematicFailurePolicy.FailClosed;
 }

@@ -22,12 +22,14 @@ internal sealed class FakeGateClient : ISchematicGateClient
 
     public List<CheckCall> CheckCalls { get; } = new();
     public List<TrackCall> TrackCalls { get; } = new();
+    public bool ThrowOnTrack { get; set; }
 
     public void Reset()
     {
         lock (_lock)
         {
             _checkResponder = null;
+            ThrowOnTrack = false;
             CheckCalls.Clear();
             TrackCalls.Clear();
         }
@@ -41,7 +43,8 @@ internal sealed class FakeGateClient : ISchematicGateClient
     public Task<CheckFlagWithEntitlementResponse> CheckFlagWithEntitlementAsync(
         string flagKey,
         Dictionary<string, string> company,
-        Dictionary<string, string> user)
+        Dictionary<string, string> user,
+        CancellationToken cancellationToken)
     {
         Func<string, CheckFlagWithEntitlementResponse>? responder;
         lock (_lock)
@@ -66,6 +69,8 @@ internal sealed class FakeGateClient : ISchematicGateClient
     {
         lock (_lock)
         {
+            if (ThrowOnTrack)
+                throw new InvalidOperationException("FakeGateClient.ThrowOnTrack is enabled.");
             TrackCalls.Add(new TrackCall(eventName, new(company), new(user), new(traits), quantity));
         }
     }

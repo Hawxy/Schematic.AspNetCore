@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Schematic.AspNetCore.Attributes;
 using Schematic.AspNetCore.Internal;
@@ -20,11 +21,16 @@ public sealed class TrackFeatureFilter : IEndpointFilter
 {
     private readonly ISchematicGateClient _client;
     private readonly IOptions<SchematicAspNetCoreOptions> _options;
+    private readonly ILogger<TrackFeatureFilter> _logger;
 
-    public TrackFeatureFilter(ISchematicGateClient client, IOptions<SchematicAspNetCoreOptions> options)
+    public TrackFeatureFilter(
+        ISchematicGateClient client,
+        IOptions<SchematicAspNetCoreOptions> options,
+        ILogger<TrackFeatureFilter> logger)
     {
         _client = client;
         _options = options;
+        _logger = logger;
     }
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -59,15 +65,28 @@ public sealed class TrackFeatureFilter : IEndpointFilter
             return result;
 
         if (http.Items[SchematicFilterItemKeys.AutoTrackFlagKey] is string autoTrackEventName)
-            _client.Track(autoTrackEventName, flagContext.Company, flagContext.User, traits: new(), quantity: null);
+            TrackSafely(autoTrackEventName, flagContext, quantity: null);
 
         if (hasExplicitTrack)
         {
             foreach (var meta in trackEvents!)
-                _client.Track(meta.EventName, flagContext.Company, flagContext.User, traits: new(), meta.Quantity);
+                TrackSafely(meta.EventName, flagContext, meta.Quantity);
         }
 
         return result;
+    }
+
+    // A tracking failure must never fail a response that already succeeded.
+    private void TrackSafely(string eventName, SchematicFlagContext flagContext, int? quantity)
+    {
+        try
+        {
+            _client.Track(eventName, flagContext.Company, flagContext.User, traits: new(), quantity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Schematic track for event '{EventName}' failed; response is unaffected.", eventName);
+        }
     }
 
     private static bool IsErrorResult(object? result, HttpContext http)

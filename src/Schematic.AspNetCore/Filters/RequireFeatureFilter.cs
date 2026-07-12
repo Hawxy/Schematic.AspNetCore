@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Schematic.AspNetCore.Attributes;
 using Schematic.AspNetCore.Denial;
 using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Options;
 using Schematic.AspNetCore.Resolvers;
+using SchematicHQ.Client.RulesEngine;
 
 namespace Schematic.AspNetCore.Filters;
 
@@ -25,11 +28,16 @@ public sealed class RequireFeatureFilter : IEndpointFilter
 {
     private readonly ISchematicGateClient _client;
     private readonly IOptions<SchematicAspNetCoreOptions> _options;
+    private readonly ILogger<RequireFeatureFilter> _logger;
 
-    public RequireFeatureFilter(ISchematicGateClient client, IOptions<SchematicAspNetCoreOptions> options)
+    public RequireFeatureFilter(
+        ISchematicGateClient client,
+        IOptions<SchematicAspNetCoreOptions> options,
+        ILogger<RequireFeatureFilter> logger)
     {
         _client = client;
         _options = options;
+        _logger = logger;
     }
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -53,7 +61,28 @@ public sealed class RequireFeatureFilter : IEndpointFilter
 
         http.Items[SchematicFilterItemKeys.FlagContext] = flagContext;
 
-        var response = await _client.CheckFlagWithEntitlementAsync(metadata.FlagKey, flagContext.Company, flagContext.User);
+        CheckFlagWithEntitlementResponse response;
+        try
+        {
+            response = await _client.CheckFlagWithEntitlementAsync(
+                metadata.FlagKey, flagContext.Company, flagContext.User, http.RequestAborted);
+        }
+        catch (OperationCanceledException) when (http.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Schematic entitlement check for flag '{FlagKey}' failed; applying {FailurePolicy}.",
+                metadata.FlagKey, options.FailurePolicy);
+
+            if (options.FailurePolicy == SchematicFailurePolicy.FailOpen)
+                return await next(context);
+
+            await WriteCheckFailureAsync(http, metadata.FlagKey);
+            return Results.Empty;
+        }
 
         if (response.Value)
         {
@@ -93,4 +122,16 @@ public sealed class RequireFeatureFilter : IEndpointFilter
         return null;
     }
 
+    private static Task WriteCheckFailureAsync(HttpContext http, string flagKey)
+    {
+        var problem = new ProblemDetails
+        {
+            Title = "Entitlement check failed",
+            Status = StatusCodes.Status503ServiceUnavailable,
+            Detail = $"The entitlement check for feature '{flagKey}' could not be completed.",
+        };
+        problem.Extensions["featureId"] = flagKey;
+
+        return Results.Problem(problem).ExecuteAsync(http);
+    }
 }

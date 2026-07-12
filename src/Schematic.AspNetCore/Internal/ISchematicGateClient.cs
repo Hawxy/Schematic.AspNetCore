@@ -13,7 +13,8 @@ public interface ISchematicGateClient
     Task<CheckFlagWithEntitlementResponse> CheckFlagWithEntitlementAsync(
         string flagKey,
         Dictionary<string, string> company,
-        Dictionary<string, string> user);
+        Dictionary<string, string> user,
+        CancellationToken cancellationToken);
 
     void Track(
         string eventName,

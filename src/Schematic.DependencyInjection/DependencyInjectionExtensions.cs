@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SchematicHQ.Client;
 
@@ -23,7 +24,10 @@ public static class DependencyInjectionExtensions
         services.AddSingleton(sp =>
         {
             var clientOptions = sp.GetRequiredService<IOptions<ClientOptions>>();
-            return new SchematicHQ.Client.Schematic(apiKey, clientOptions.Value);
+            var options = clientOptions.Value;
+            var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+            options.LoggerFactory = loggerFactory;
+            return new SchematicHQ.Client.Schematic(apiKey, options);
         });
 
         return services;
