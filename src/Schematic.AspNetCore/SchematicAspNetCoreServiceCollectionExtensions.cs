@@ -39,18 +39,20 @@ public static class SchematicAspNetCoreServiceCollectionExtensions
         where TResolver : class, ISchematicFlagContextResolver
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.RemoveAll<ISchematicFlagContextResolver>();
         services.AddScoped<ISchematicFlagContextResolver, TResolver>();
         return services;
     }
 
     /// <summary>
     /// Registers the identify-context resolver used by <c>UseSchematicIdentify</c> to call
-    /// <c>Schematic.Identify</c> per request.
+    /// <c>Schematic.Identify</c> per request. Replaces any previously registered resolver.
     /// </summary>
     public static IServiceCollection AddSchematicIdentifyContextResolver<TResolver>(this IServiceCollection services)
         where TResolver : class, ISchematicIdentifyContextResolver
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.RemoveAll<ISchematicIdentifyContextResolver>();
         services.AddScoped<ISchematicIdentifyContextResolver, TResolver>();
         return services;
     }

@@ -1,7 +1,14 @@
 using Schematic.AspNetCore.Internal;
+using SchematicHQ.Client;
 using SchematicHQ.Client.RulesEngine;
 
 namespace Schematic.AspNetCore.Tests.Infrastructure;
+
+internal sealed record IdentifyCall(
+    Dictionary<string, string> Keys,
+    EventBodyIdentifyCompany? Company,
+    string? Name,
+    Dictionary<string, object?>? Traits);
 
 internal sealed record TrackCall(
     string EventName,
@@ -22,7 +29,9 @@ internal sealed class FakeGateClient : ISchematicGateClient
 
     public List<CheckCall> CheckCalls { get; } = new();
     public List<TrackCall> TrackCalls { get; } = new();
+    public List<IdentifyCall> IdentifyCalls { get; } = new();
     public bool ThrowOnTrack { get; set; }
+    public bool ThrowOnIdentify { get; set; }
 
     public void Reset()
     {
@@ -30,8 +39,10 @@ internal sealed class FakeGateClient : ISchematicGateClient
         {
             _checkResponder = null;
             ThrowOnTrack = false;
+            ThrowOnIdentify = false;
             CheckCalls.Clear();
             TrackCalls.Clear();
+            IdentifyCalls.Clear();
         }
     }
 
@@ -72,6 +83,20 @@ internal sealed class FakeGateClient : ISchematicGateClient
             if (ThrowOnTrack)
                 throw new InvalidOperationException("FakeGateClient.ThrowOnTrack is enabled.");
             TrackCalls.Add(new TrackCall(eventName, new(company), new(user), new(traits), quantity));
+        }
+    }
+
+    public void Identify(
+        Dictionary<string, string> keys,
+        EventBodyIdentifyCompany? company,
+        string? name,
+        Dictionary<string, object?>? traits)
+    {
+        lock (_lock)
+        {
+            if (ThrowOnIdentify)
+                throw new InvalidOperationException("FakeGateClient.ThrowOnIdentify is enabled.");
+            IdentifyCalls.Add(new IdentifyCall(new(keys), company, name, traits is null ? null : new(traits)));
         }
     }
 }

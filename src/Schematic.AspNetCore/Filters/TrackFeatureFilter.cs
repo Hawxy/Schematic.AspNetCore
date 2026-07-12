@@ -59,7 +59,7 @@ public sealed class TrackFeatureFilter : IEndpointFilter
             return result;
 
         var flagContext = http.Items[SchematicFilterItemKeys.FlagContext] as SchematicFlagContext
-            ?? await ResolveFlagContextAsync(http);
+            ?? await FlagContextResolution.ResolveAsync(http, _options.Value);
         
         if (flagContext is null)
             return result;
@@ -98,15 +98,4 @@ public sealed class TrackFeatureFilter : IEndpointFilter
         return http.Response.StatusCode >= 400;
     }
 
-    private async ValueTask<SchematicFlagContext?> ResolveFlagContextAsync(HttpContext http)
-    {
-        var resolver = http.RequestServices.GetService<ISchematicFlagContextResolver>();
-        if (resolver is not null)
-            return await resolver.ResolveAsync(http, http.RequestAborted);
-
-        if (_options.Value.ResolveContext is { } resolve)
-            return await resolve(http);
-
-        return null;
-    }
 }

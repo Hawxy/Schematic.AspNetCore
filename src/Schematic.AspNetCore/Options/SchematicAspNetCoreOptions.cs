@@ -23,4 +23,11 @@ public sealed class SchematicAspNetCoreOptions
     /// Defaults to <see cref="SchematicFailurePolicy.FailClosed"/> (503).
     /// </summary>
     public SchematicFailurePolicy FailurePolicy { get; set; } = SchematicFailurePolicy.FailClosed;
+
+    /// <summary>
+    /// When set, <c>UseSchematicIdentify</c> sends at most one Identify per identity within this window
+    /// instead of one per request. The dedup key covers the user/company keys and names — not traits, so
+    /// trait changes within the window are not re-sent. <c>null</c> (the default) identifies on every request.
+    /// </summary>
+    public TimeSpan? IdentifyDeduplicationWindow { get; set; }
 }

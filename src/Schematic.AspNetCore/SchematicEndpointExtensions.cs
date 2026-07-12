@@ -19,18 +19,11 @@ public static class SchematicEndpointExtensions
     public static TBuilder RequireFeature<TBuilder>(
         this TBuilder builder,
         string flagKey,
-        bool track = false,
-        double? requestedUsage = null,
-        string? requestedValue = null)
+        bool track = false)
         where TBuilder : IEndpointConventionBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.WithMetadata(new RequireFeatureAttribute(flagKey)
-        {
-            Track = track,
-            RequestedUsage = requestedUsage ?? double.NaN,
-            RequestedValue = requestedValue,
-        });
+        builder.WithMetadata(new RequireFeatureAttribute(flagKey) { Track = track });
         return builder;
     }
 

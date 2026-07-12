@@ -55,7 +55,7 @@ public sealed class RequireFeatureFilter : IEndpointFilter
             return await next(context);
 
         var options = _options.Value;
-        var flagContext = await ResolveFlagContextAsync(http, options);
+        var flagContext = await FlagContextResolution.ResolveAsync(http, options);
         if (flagContext is null)
             return Results.Unauthorized();
 
@@ -94,8 +94,6 @@ public sealed class RequireFeatureFilter : IEndpointFilter
 
         var denial = new SchematicDenialContext(
             FeatureId: metadata.FlagKey,
-            RequestedUsage: metadata.RequestedUsage,
-            RequestedValue: metadata.RequestedValue,
             Reason: response.Reason);
 
         if (options.OnDenied is { } onDenied)
@@ -108,18 +106,6 @@ public sealed class RequireFeatureFilter : IEndpointFilter
         }
 
         return Results.Empty;
-    }
-
-    private async ValueTask<SchematicFlagContext?> ResolveFlagContextAsync(HttpContext http, SchematicAspNetCoreOptions options)
-    {
-        var resolver = http.RequestServices.GetService<ISchematicFlagContextResolver>();
-        if (resolver is not null)
-            return await resolver.ResolveAsync(http, http.RequestAborted);
-
-        if (options.ResolveContext is { } resolve)
-            return await resolve(http);
-
-        return null;
     }
 
     private static Task WriteCheckFailureAsync(HttpContext http, string flagKey)

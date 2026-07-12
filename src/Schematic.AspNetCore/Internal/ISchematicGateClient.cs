@@ -1,3 +1,4 @@
+using SchematicHQ.Client;
 using SchematicHQ.Client.RulesEngine;
 
 namespace Schematic.AspNetCore.Internal;
@@ -22,4 +23,10 @@ public interface ISchematicGateClient
         Dictionary<string, string> user,
         Dictionary<string, object?> traits,
         int? quantity);
+
+    void Identify(
+        Dictionary<string, string> keys,
+        EventBodyIdentifyCompany? company,
+        string? name,
+        Dictionary<string, object?>? traits);
 }
