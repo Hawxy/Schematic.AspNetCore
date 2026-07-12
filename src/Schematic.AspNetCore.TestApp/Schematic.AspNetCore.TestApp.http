@@ -1,0 +1,6 @@
+@Schematic.AspNetCore.TestApp_HostAddress = http://localhost:5090
+
+GET {{Schematic.AspNetCore.TestApp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
