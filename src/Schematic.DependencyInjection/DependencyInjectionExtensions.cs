@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SchematicHQ.Client;
+using SchematicHQ.Client.Cache;
 
 namespace Schematic.DependencyInjection;
 
@@ -27,6 +28,7 @@ public static class DependencyInjectionExtensions
             var options = clientOptions.Value;
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             options.LoggerFactory = loggerFactory;
+            options.CacheProvider ??= sp.GetService<ICacheProvider>();
             return new SchematicHQ.Client.Schematic(apiKey, options);
         });
 

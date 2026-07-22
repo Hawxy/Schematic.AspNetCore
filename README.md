@@ -8,6 +8,7 @@ Two packages:
 | --- | --- |
 | `Schematic.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring. |
 | `Schematic.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
+| `Schematic.DependencyInjection.FusionCache` | [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider` for the SDK's flag-check caching. |
 
 ## Quickstart
 
@@ -104,6 +105,18 @@ builder.Services.AddSchematicAspNetCore(options =>
     options.IdentifyDeduplicationWindow = TimeSpan.FromMinutes(5);
 });
 ```
+
+## Caching with FusionCache
+
+The SDK accepts an `ICacheProvider` for its internal caching. `Schematic.DependencyInjection.FusionCache` supplies one backed by [FusionCache](https://github.com/ZiggyCreatures/FusionCache):
+
+```csharp
+builder.Services.AddFusionCache();
+builder.Services.AddSchematicFusionCache();          // or AddSchematicFusionCache("cache-name")
+builder.Services.AddSchematic(apiKey);               // picks up the registered ICacheProvider
+```
+
+`AddSchematic` wires any DI-registered `ICacheProvider` into `ClientOptions.CacheProvider` unless one was set explicitly, so custom providers plug in the same way. Entries use the SDK's built-in default cache TTL (5 seconds) unless the SDK passes a per-entry TTL; pass `AddSchematicFusionCache(defaultTtl: ...)` to change it. Note: FusionCache does not support key enumeration, so the provider's `DeleteMissing` is a no-op — stale entries age out via TTL.
 
 ## Testing your app
 

@@ -17,6 +17,7 @@
     <ItemGroup>
       <ProjectReference Include="..\Schematic.AspNetCore.TestApp\Schematic.AspNetCore.TestApp.csproj" />
       <ProjectReference Include="..\Schematic.AspNetCore\Schematic.AspNetCore.csproj" />
+      <ProjectReference Include="..\Schematic.DependencyInjection.FusionCache\Schematic.DependencyInjection.FusionCache.csproj" />
     </ItemGroup>
 
 </Project>
