@@ -6,9 +6,9 @@ Two packages:
 
 | Package | Purpose |
 | --- | --- |
-| `Schematic.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring. |
+| `Schematic.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring and shutdown event flushing, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider`. |
 | `Schematic.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
-| `Schematic.DependencyInjection.FusionCache` | [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider` for the SDK's flag-check caching. |
+| `Schematic.Extensions.AI` | [Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai) middleware: meter chat token usage and gate model calls behind entitlements. |
 
 ## Quickstart
 
@@ -47,6 +47,8 @@ public sealed class MyFlagContextResolver : ISchematicFlagContextResolver
 ```
 
 For simple cases, a delegate works instead of a resolver class: `AddSchematicAspNetCore(o => o.ResolveContext = http => ...)`.
+
+The SDK buffers Track/Identify events and sends them periodically. `AddSchematic` registers a lifetime hook that calls `Schematic.Shutdown()` when the host's service provider is disposed, so events buffered at shutdown are flushed instead of lost (bounded at 10 seconds so a broken connection cannot hang shutdown).
 
 ## Gating endpoints
 
@@ -89,6 +91,19 @@ app.UseSchematicIdentify();
 
 Calls `Schematic.Identify` for each request whose resolver returns an identity. Set `options.IdentifyDeduplicationWindow` to send at most one Identify per identity per window.
 
+## Receiving webhooks
+
+Verify inbound [Schematic webhooks](https://docs.schematichq.com/integrations/webhooks) with the signing secret from the dashboard:
+
+```csharp
+builder.Services.AddSchematicAspNetCore(o => o.WebhookSecret = builder.Configuration["Schematic:WebhookSecret"]);
+...
+app.MapPost("/webhooks/schematic", (JsonElement payload) => Results.Ok())
+   .RequireSchematicWebhookSignature();
+```
+
+The filter validates the `X-Schematic-Webhook-Signature` / `X-Schematic-Webhook-Timestamp` headers against the raw request body (via the SDK's `WebhookVerifier`) before the endpoint runs, responding 401 ProblemDetails when they are missing or invalid. The body remains readable by the endpoint afterwards.
+
 ## Options
 
 ```csharp
@@ -108,7 +123,7 @@ builder.Services.AddSchematicAspNetCore(options =>
 
 ## Caching with FusionCache
 
-The SDK accepts an `ICacheProvider` for its internal caching. `Schematic.DependencyInjection.FusionCache` supplies one backed by [FusionCache](https://github.com/ZiggyCreatures/FusionCache):
+The SDK accepts an `ICacheProvider` for its internal caching. `Schematic.DependencyInjection` supplies one backed by [FusionCache](https://github.com/ZiggyCreatures/FusionCache):
 
 ```csharp
 builder.Services.AddFusionCache();
@@ -116,7 +131,20 @@ builder.Services.AddSchematicFusionCache();          // or AddSchematicFusionCac
 builder.Services.AddSchematic(apiKey);               // picks up the registered ICacheProvider
 ```
 
-`AddSchematic` wires any DI-registered `ICacheProvider` into `ClientOptions.CacheProvider` unless one was set explicitly, so custom providers plug in the same way. Entries use the SDK's built-in default cache TTL (5 seconds) unless the SDK passes a per-entry TTL; pass `AddSchematicFusionCache(defaultTtl: ...)` to change it. Note: FusionCache does not support key enumeration, so the provider's `DeleteMissing` is a no-op — stale entries age out via TTL.
+`AddSchematic` wires any DI-registered `ICacheProvider` into `ClientOptions.CacheProvider` unless one was set explicitly, so custom providers plug in the same way. Entries use the SDK's built-in default cache TTL (5 seconds) unless the SDK passes a per-entry TTL; pass `AddSchematicFusionCache(defaultTtl: ...)` to change it. Note: FusionCache does not support key enumeration, so the provider's `DeleteMissing` is a no-op — stale entries age out via TTL. The SDK's datastream mode (`options.UseDatastream`) relies on `DeleteMissing` to sweep deleted flags during bulk sync, so prefer the SDK's built-in Redis/local cache configuration over this provider when enabling datastream.
+
+## Metering AI usage
+
+`Schematic.Extensions.AI` plugs into the Microsoft.Extensions.AI chat pipeline:
+
+```csharp
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddChatClient(sp => /* provider client */)
+    .UseSchematicRequireFeature("ai-chat")           // deny before the model is invoked
+    .UseSchematicUsageTracking();                    // then meter what allowed calls consume
+```
+
+Tracking reads each response's `UsageDetails` (streaming included — usage is aggregated across updates and recorded even if the consumer abandons the stream) and emits Track events: by default `ai.input-tokens` and `ai.output-tokens` with the model id as a trait, fully remappable via `options.MapUsage`. Identity comes from the ambient HTTP request's flag-context resolver; set `options.FallbackContext` for background/non-HTTP calls. Denied gating throws `SchematicFeatureDeniedException` (with `FlagKey`/`Reason`); check failures follow `options.FailurePolicy`. Tracking failures never fail the AI call.
 
 ## Testing your app
 

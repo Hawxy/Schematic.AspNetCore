@@ -27,6 +27,7 @@ public static class SchematicAspNetCoreServiceCollectionExtensions
         services.TryAddSingleton<ISchematicGateClient, SchematicGateClient>();
         services.TryAddSingleton<RequireFeatureFilter>();
         services.TryAddSingleton<TrackFeatureFilter>();
+        services.TryAddSingleton<SchematicWebhookSignatureFilter>();
 
         return services;
     }

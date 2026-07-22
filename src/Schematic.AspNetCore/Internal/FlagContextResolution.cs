@@ -7,9 +7,11 @@ namespace Schematic.AspNetCore.Internal;
 
 /// <summary>
 /// Resolves the flag context for a request: a DI-registered <see cref="ISchematicFlagContextResolver"/>
-/// wins over the <see cref="SchematicAspNetCoreOptions.ResolveContext"/> delegate.
+/// wins over the <see cref="SchematicAspNetCoreOptions.ResolveContext"/> delegate. Public so companion
+/// packages (e.g. Schematic.Extensions.AI) resolve the same identity as the filters; most consumers
+/// should not need it directly.
 /// </summary>
-internal static class FlagContextResolution
+public static class FlagContextResolution
 {
     public static async ValueTask<SchematicFlagContext?> ResolveAsync(HttpContext http, SchematicAspNetCoreOptions options)
     {

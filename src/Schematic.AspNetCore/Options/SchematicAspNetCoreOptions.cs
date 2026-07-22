@@ -30,4 +30,11 @@ public sealed class SchematicAspNetCoreOptions
     /// trait changes within the window are not re-sent. <c>null</c> (the default) identifies on every request.
     /// </summary>
     public TimeSpan? IdentifyDeduplicationWindow { get; set; }
+
+    /// <summary>
+    /// Signing secret used by <c>RequireSchematicWebhookSignature</c> to verify inbound Schematic
+    /// webhooks. Found in the Schematic dashboard's webhook settings. Required only when webhook
+    /// verification is used.
+    /// </summary>
+    public string? WebhookSecret { get; set; }
 }

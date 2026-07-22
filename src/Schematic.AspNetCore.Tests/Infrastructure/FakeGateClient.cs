@@ -8,14 +8,16 @@ internal sealed record IdentifyCall(
     Dictionary<string, string> Keys,
     EventBodyIdentifyCompany? Company,
     string? Name,
-    Dictionary<string, object?>? Traits);
+    Dictionary<string, object?>? Traits,
+    IdentifyOptions? Options = null);
 
 internal sealed record TrackCall(
     string EventName,
     Dictionary<string, string> Company,
     Dictionary<string, string> User,
     Dictionary<string, object?> Traits,
-    int? Quantity);
+    int? Quantity,
+    TrackOptions? Options = null);
 
 internal sealed record CheckCall(
     string FlagKey,
@@ -76,13 +78,14 @@ internal sealed class FakeGateClient : ISchematicGateClient
         Dictionary<string, string> company,
         Dictionary<string, string> user,
         Dictionary<string, object?> traits,
-        int? quantity)
+        int? quantity,
+        TrackOptions? options = null)
     {
         lock (_lock)
         {
             if (ThrowOnTrack)
                 throw new InvalidOperationException("FakeGateClient.ThrowOnTrack is enabled.");
-            TrackCalls.Add(new TrackCall(eventName, new(company), new(user), new(traits), quantity));
+            TrackCalls.Add(new TrackCall(eventName, new(company), new(user), new(traits), quantity, options));
         }
     }
 
@@ -90,13 +93,14 @@ internal sealed class FakeGateClient : ISchematicGateClient
         Dictionary<string, string> keys,
         EventBodyIdentifyCompany? company,
         string? name,
-        Dictionary<string, object?>? traits)
+        Dictionary<string, object?>? traits,
+        IdentifyOptions? options = null)
     {
         lock (_lock)
         {
             if (ThrowOnIdentify)
                 throw new InvalidOperationException("FakeGateClient.ThrowOnIdentify is enabled.");
-            IdentifyCalls.Add(new IdentifyCall(new(keys), company, name, traits is null ? null : new(traits)));
+            IdentifyCalls.Add(new IdentifyCall(new(keys), company, name, traits is null ? null : new(traits), options));
         }
     }
 }

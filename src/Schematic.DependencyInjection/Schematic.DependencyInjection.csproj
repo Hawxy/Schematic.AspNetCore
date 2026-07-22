@@ -5,8 +5,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <Version>0.1.0</Version>
-        <Description>Microsoft.Extensions.DependencyInjection registration for the SchematicHQ.Client SDK, with ILoggerFactory wiring.</Description>
-        <PackageTags>schematic;entitlements;feature-flags;dependency-injection</PackageTags>
+        <Description>Microsoft.Extensions.DependencyInjection registration for the SchematicHQ.Client SDK, with ILoggerFactory wiring and a FusionCache-backed cache provider.</Description>
+        <PackageTags>schematic;entitlements;feature-flags;dependency-injection;fusioncache;caching</PackageTags>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -15,10 +15,12 @@
 
     <ItemGroup>
         <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <InternalsVisibleTo Include="Schematic.AspNetCore.Tests" />
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="SchematicHQ.Client" Version="1.4.10" />
+      <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.6.0" />
     </ItemGroup>
 
 </Project>

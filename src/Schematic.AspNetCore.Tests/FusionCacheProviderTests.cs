@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Schematic.DependencyInjection;
-using Schematic.DependencyInjection.FusionCache;
 using SchematicHQ.Client;
 using SchematicHQ.Client.Cache;
 using Shouldly;

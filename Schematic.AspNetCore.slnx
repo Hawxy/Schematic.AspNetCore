@@ -2,6 +2,6 @@
   <Project Path="src/Schematic.AspNetCore.TestApp/Schematic.AspNetCore.TestApp.csproj" />
   <Project Path="src/Schematic.AspNetCore.Tests/Schematic.AspNetCore.Tests.csproj" />
   <Project Path="src/Schematic.AspNetCore/Schematic.AspNetCore.csproj" />
-  <Project Path="src/Schematic.DependencyInjection.FusionCache/Schematic.DependencyInjection.FusionCache.csproj" />
+  <Project Path="src/Schematic.Extensions.AI/Schematic.Extensions.AI.csproj" />
   <Project Path="src/Schematic.DependencyInjection/Schematic.DependencyInjection.csproj" />
 </Solution>

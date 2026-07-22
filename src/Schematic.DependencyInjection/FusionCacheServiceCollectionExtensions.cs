@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SchematicHQ.Client.Cache;
 using ZiggyCreatures.Caching.Fusion;
 
-namespace Schematic.DependencyInjection.FusionCache;
+namespace Schematic.DependencyInjection;
 
 public static class FusionCacheServiceCollectionExtensions
 {

@@ -17,16 +17,26 @@ public interface ISchematicGateClient
         Dictionary<string, string> user,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Buffered, fire-and-forget event send. <paramref name="options"/> carries SDK send options
+    /// (idempotency key, sent-at, backfill).
+    /// </summary>
     void Track(
         string eventName,
         Dictionary<string, string> company,
         Dictionary<string, string> user,
         Dictionary<string, object?> traits,
-        int? quantity);
+        int? quantity,
+        TrackOptions? options = null);
 
+    /// <summary>
+    /// Buffered, fire-and-forget identify. <paramref name="options"/> carries SDK send options
+    /// (idempotency key).
+    /// </summary>
     void Identify(
         Dictionary<string, string> keys,
         EventBodyIdentifyCompany? company,
         string? name,
-        Dictionary<string, object?>? traits);
+        Dictionary<string, object?>? traits,
+        IdentifyOptions? options = null);
 }

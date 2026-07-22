@@ -12,6 +12,7 @@ public static class TestEndpoints
     public const string ControllerFlag = "test.controller.gate";
     public const string ExplicitTrackEvent = "test.minimal.event";
     public const string ControllerTrackEvent = "test.controller.event";
+    public const string WebhookSecret = "test-webhook-secret";
 
     public static IEndpointRouteBuilder MapTestEndpoints(this IEndpointRouteBuilder app)
     {
@@ -28,6 +29,13 @@ public static class TestEndpoints
            .TrackFeature(ExplicitTrackEvent);
 
         app.MapGet("/min/no-meta", () => Results.Ok(new { ok = true }));
+
+        // Echoes the body back so tests can prove it is still readable after signature verification.
+        app.MapPost("/webhook", async (HttpRequest request) =>
+        {
+            using var reader = new StreamReader(request.Body);
+            return Results.Text(await reader.ReadToEndAsync());
+        }).RequireSchematicWebhookSignature();
 
         // Maps GET *and* OPTIONS to the same handler so we can prove the filters skip OPTIONS preflight
         // even when the route would otherwise match it.

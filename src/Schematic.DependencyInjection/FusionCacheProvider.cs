@@ -1,7 +1,7 @@
 using SchematicHQ.Client.Cache;
 using ZiggyCreatures.Caching.Fusion;
 
-namespace Schematic.DependencyInjection.FusionCache;
+namespace Schematic.DependencyInjection;
 
 /// <summary>
 /// <see cref="ICacheProvider"/> backed by a FusionCache instance. Every entry gets an explicit duration:

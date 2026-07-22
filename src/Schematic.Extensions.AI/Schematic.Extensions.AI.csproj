@@ -5,8 +5,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <Version>0.1.0</Version>
-        <Description>FusionCache-backed cache provider for the SchematicHQ.Client SDK, registered through Microsoft.Extensions.DependencyInjection.</Description>
-        <PackageTags>schematic;entitlements;feature-flags;fusioncache;caching;dependency-injection</PackageTags>
+        <Description>Microsoft.Extensions.AI integration for Schematic entitlement management: meter chat token usage as Schematic Track events and gate model calls behind entitlements.</Description>
+        <PackageTags>schematic;entitlements;feature-flags;metering;ai;ichatclient</PackageTags>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -18,11 +18,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Schematic.DependencyInjection\Schematic.DependencyInjection.csproj" />
+        <ProjectReference Include="..\Schematic.AspNetCore\Schematic.AspNetCore.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.6.0" />
+      <PackageReference Include="Microsoft.Extensions.AI" Version="10.8.1" />
     </ItemGroup>
 
 </Project>

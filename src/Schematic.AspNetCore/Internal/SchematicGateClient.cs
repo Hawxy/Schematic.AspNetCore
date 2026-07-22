@@ -26,13 +26,15 @@ internal sealed class SchematicGateClient : ISchematicGateClient
         Dictionary<string, string> company,
         Dictionary<string, string> user,
         Dictionary<string, object?> traits,
-        int? quantity)
-        => _client.Track(eventName, company, user, traits, quantity);
+        int? quantity,
+        SchematicHQ.Client.TrackOptions? options = null)
+        => _client.Track(eventName, company, user, traits, quantity, options);
 
     public void Identify(
         Dictionary<string, string> keys,
         SchematicHQ.Client.EventBodyIdentifyCompany? company,
         string? name,
-        Dictionary<string, object?>? traits)
-        => _client.Identify(keys, company, name, traits);
+        Dictionary<string, object?>? traits,
+        SchematicHQ.Client.IdentifyOptions? options = null)
+        => _client.Identify(keys, company, name, traits, options);
 }

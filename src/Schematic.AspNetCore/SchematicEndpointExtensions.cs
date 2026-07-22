@@ -55,4 +55,16 @@ public static class SchematicEndpointExtensions
         builder.AddEndpointFilter<TBuilder, TrackFeatureFilter>();
         return builder;
     }
+
+    /// <summary>
+    /// Verifies the Schematic webhook signature before the endpoint runs; responds 401 when the signature
+    /// headers are missing or invalid. Requires <c>SchematicAspNetCoreOptions.WebhookSecret</c>.
+    /// </summary>
+    public static TBuilder RequireSchematicWebhookSignature<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.AddEndpointFilter<TBuilder, SchematicWebhookSignatureFilter>();
+        return builder;
+    }
 }
