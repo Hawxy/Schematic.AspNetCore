@@ -1,0 +1,23 @@
+<Project>
+
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Library dependencies -->
+        <PackageVersion Include="DotNet.ReproducibleBuilds" Version="2.0.5" />
+        <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />
+        <PackageVersion Include="Quartz.Extensions.DependencyInjection" Version="3.18.2" />
+        <PackageVersion Include="SchematicHQ.Client" Version="1.4.10" />
+        <PackageVersion Include="ZiggyCreatures.FusionCache" Version="2.6.0" />
+        <!-- Build -->
+        <PackageVersion Include="Nuke.Common" Version="10.1.0" />
+        <!-- Test stack -->
+        <PackageVersion Include="Alba" Version="8.5.3" />
+        <PackageVersion Include="Shouldly" Version="4.3.0" />
+        <PackageVersion Include="TUnit" Version="1.58.0" />
+    </ItemGroup>
+
+</Project>

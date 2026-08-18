@@ -1,26 +1,19 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <Version>0.1.0</Version>
-        <Description>Microsoft.Extensions.DependencyInjection registration for the SchematicHQ.Client SDK, with ILoggerFactory wiring and a FusionCache-backed cache provider.</Description>
-        <PackageTags>schematic;entitlements;feature-flags;dependency-injection;fusioncache;caching</PackageTags>
-        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <Description>Microsoft.Extensions.DependencyInjection registration for the SchematicHQ.Client SDK, with ILoggerFactory wiring, a FusionCache-backed cache provider, and scheduled trait reporting.</Description>
+        <PackageTags>dependency-injection;fusioncache;caching</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
         <InternalsVisibleTo Include="Schematic.AspNetCore.Tests" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="SchematicHQ.Client" Version="1.4.10" />
-      <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.6.0" />
+      <PackageReference Include="SchematicHQ.Client" />
+      <PackageReference Include="ZiggyCreatures.FusionCache" />
     </ItemGroup>
+
+    <Import Project="../../Package.Build.props" />
 
 </Project>
