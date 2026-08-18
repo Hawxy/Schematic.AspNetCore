@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Alba" />
+      <PackageReference Include="Shouldly" />
+      <PackageReference Include="TUnit" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SchematicHQ.Community.AspNetCore.TestApp\SchematicHQ.Community.AspNetCore.TestApp.csproj" />
+      <ProjectReference Include="..\SchematicHQ.Community.AspNetCore\SchematicHQ.Community.AspNetCore.csproj" />
+      <ProjectReference Include="..\SchematicHQ.Community.Extensions.AI\SchematicHQ.Community.Extensions.AI.csproj" />
+      <ProjectReference Include="..\SchematicHQ.Community.Extensions.Quartz\SchematicHQ.Community.Extensions.Quartz.csproj" />
+    </ItemGroup>
+
+</Project>

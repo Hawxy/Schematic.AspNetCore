@@ -1,8 +1,8 @@
 <Solution>
-  <Project Path="src/Schematic.AspNetCore.TestApp/Schematic.AspNetCore.TestApp.csproj" />
-  <Project Path="src/Schematic.AspNetCore.Tests/Schematic.AspNetCore.Tests.csproj" />
-  <Project Path="src/Schematic.AspNetCore/Schematic.AspNetCore.csproj" />
-  <Project Path="src/Schematic.Extensions.AI/Schematic.Extensions.AI.csproj" />
-  <Project Path="src/Schematic.Extensions.Quartz/Schematic.Extensions.Quartz.csproj" />
-  <Project Path="src/Schematic.DependencyInjection/Schematic.DependencyInjection.csproj" />
+  <Project Path="src/SchematicHQ.Community.AspNetCore.TestApp/SchematicHQ.Community.AspNetCore.TestApp.csproj" />
+  <Project Path="src/SchematicHQ.Community.AspNetCore.Tests/SchematicHQ.Community.AspNetCore.Tests.csproj" />
+  <Project Path="src/SchematicHQ.Community.AspNetCore/SchematicHQ.Community.AspNetCore.csproj" />
+  <Project Path="src/SchematicHQ.Community.Extensions.AI/SchematicHQ.Community.Extensions.AI.csproj" />
+  <Project Path="src/SchematicHQ.Community.Extensions.Quartz/SchematicHQ.Community.Extensions.Quartz.csproj" />
+  <Project Path="src/SchematicHQ.Community.DependencyInjection/SchematicHQ.Community.DependencyInjection.csproj" />
 </Solution>

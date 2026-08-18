@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Description>Quartz.NET integration for Schematic entitlement management: gate and track scheduled jobs via attributes, and schedule recurring trait reports.</Description>
+        <PackageTags>metering;quartz;scheduling</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="SchematicHQ.Community.AspNetCore.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SchematicHQ.Community.DependencyInjection\SchematicHQ.Community.DependencyInjection.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Quartz.Extensions.DependencyInjection" />
+    </ItemGroup>
+
+    <Import Project="../../Package.Build.props" />
+
+</Project>

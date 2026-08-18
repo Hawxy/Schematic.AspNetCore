@@ -1,4 +1,4 @@
-# Schematic.AspNetCore
+# SchematicHQ.Community.AspNetCore
 
 ASP.NET Core integration for [Schematic](https://schematichq.com) entitlement management. 
 
@@ -13,10 +13,10 @@ Packages:
 
 | Package | Purpose |
 | --- | --- |
-| `Schematic.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider` and scheduled trait reporting. |
-| `Schematic.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
-| `Schematic.Extensions.AI` | [Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai) middleware: meter chat token usage and gate model calls behind entitlements. |
-| `Schematic.Extensions.Quartz` | [Quartz.NET](https://www.quartz-scheduler.net/) integration: gate and track scheduled jobs, and run trait reports on a cron schedule. |
+| `SchematicHQ.Community.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider` and scheduled trait reporting. |
+| `SchematicHQ.Community.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
+| `SchematicHQ.Community.Extensions.AI` | [Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai) middleware: meter chat token usage and gate model calls behind entitlements. |
+| `SchematicHQ.Community.Extensions.Quartz` | [Quartz.NET](https://www.quartz-scheduler.net/) integration: gate and track scheduled jobs, and run trait reports on a cron schedule. |
 
 ## Quickstart
 
@@ -131,7 +131,7 @@ builder.Services.AddSchematicAspNetCore(options =>
 
 ## Caching with FusionCache
 
-The SDK accepts an `ICacheProvider` for its internal caching. `Schematic.DependencyInjection` supplies one backed by [FusionCache](https://github.com/ZiggyCreatures/FusionCache):
+The SDK accepts an `ICacheProvider` for its internal caching. `SchematicHQ.Community.DependencyInjection` supplies one backed by [FusionCache](https://github.com/ZiggyCreatures/FusionCache):
 
 ```csharp
 builder.Services.AddFusionCache();
@@ -143,7 +143,7 @@ builder.Services.AddSchematic(apiKey);               // picks up the registered 
 
 ## Metering AI usage
 
-`Schematic.Extensions.AI` plugs into the Microsoft.Extensions.AI chat pipeline:
+`SchematicHQ.Community.Extensions.AI` plugs into the Microsoft.Extensions.AI chat pipeline:
 
 ```csharp
 builder.Services.AddHttpContextAccessor();
@@ -156,7 +156,7 @@ Tracking reads each response's `UsageDetails` (streaming included — usage is a
 
 ## Gating and tracking Quartz jobs
 
-`Schematic.Extensions.Quartz` applies the same gate/track model to scheduled jobs:
+`SchematicHQ.Community.Extensions.Quartz` applies the same gate/track model to scheduled jobs:
 
 ```csharp
 builder.Services.AddSchematicQuartz();                 // options, resolver, listeners

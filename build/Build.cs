@@ -64,10 +64,10 @@ class Build : NukeBuild
 
     static readonly string[] PackableProjects =
     [
-        "Schematic.DependencyInjection",
-        "Schematic.AspNetCore",
-        "Schematic.Extensions.AI",
-        "Schematic.Extensions.Quartz",
+        "SchematicHQ.Community.DependencyInjection",
+        "SchematicHQ.Community.AspNetCore",
+        "SchematicHQ.Community.Extensions.AI",
+        "SchematicHQ.Community.Extensions.Quartz",
     ];
 
     Target NugetPack => _ => _

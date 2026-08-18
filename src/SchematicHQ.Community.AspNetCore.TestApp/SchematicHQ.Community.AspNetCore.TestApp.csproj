@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SchematicHQ.Community.AspNetCore\SchematicHQ.Community.AspNetCore.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="SchematicHQ.Community.AspNetCore.Tests" />
+    </ItemGroup>
+
+</Project>
