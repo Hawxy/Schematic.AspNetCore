@@ -1,6 +1,5 @@
 using Microsoft.Extensions.AI;
-using Schematic.AspNetCore.Options;
-using Schematic.AspNetCore.Resolvers;
+using Schematic.DependencyInjection;
 
 namespace Schematic.Extensions.AI;
 

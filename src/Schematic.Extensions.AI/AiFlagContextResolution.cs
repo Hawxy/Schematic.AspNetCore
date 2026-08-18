@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Options;
-using Schematic.AspNetCore.Resolvers;
+using Schematic.DependencyInjection;
 
 namespace Schematic.Extensions.AI;
 

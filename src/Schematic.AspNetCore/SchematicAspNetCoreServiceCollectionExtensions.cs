@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Schematic.AspNetCore.Filters;
-using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Options;
 using Schematic.AspNetCore.Resolvers;
 
@@ -24,7 +23,6 @@ public static class SchematicAspNetCoreServiceCollectionExtensions
         if (configure is not null)
             optionsBuilder.Configure(configure);
 
-        services.TryAddSingleton<ISchematicGateClient, SchematicGateClient>();
         services.TryAddSingleton<RequireFeatureFilter>();
         services.TryAddSingleton<TrackFeatureFilter>();
         services.TryAddSingleton<SchematicWebhookSignatureFilter>();

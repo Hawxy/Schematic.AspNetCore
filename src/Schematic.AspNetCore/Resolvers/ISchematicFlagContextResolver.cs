@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Schematic.DependencyInjection;
 
 namespace Schematic.AspNetCore.Resolvers;
 

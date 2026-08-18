@@ -26,6 +26,10 @@ public static class DependencyInjectionExtensions
         // Flushes buffered Track/Identify events via Schematic.Shutdown() when the provider is disposed.
         services.TryAddSingleton<SchematicClientLifetime>();
 
+        // Testability seam used by the integration packages (AspNetCore filters, AI middleware, Quartz
+        // listeners); TryAdd so tests or advanced callers can register their own implementation first.
+        services.TryAddSingleton<ISchematicGateClient, SchematicGateClient>();
+
         services.AddSingleton(sp =>
         {
             var clientOptions = sp.GetRequiredService<IOptions<ClientOptions>>();

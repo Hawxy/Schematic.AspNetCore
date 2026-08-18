@@ -3,10 +3,10 @@ using Alba;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Options;
 using Schematic.AspNetCore.Resolvers;
 using Schematic.AspNetCore.TestApp;
+using Schematic.DependencyInjection;
 using Schematic.AspNetCore.Tests.Infrastructure;
 using Shouldly;
 

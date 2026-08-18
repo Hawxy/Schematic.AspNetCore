@@ -2,8 +2,8 @@ using Alba;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Resolvers;
+using Schematic.DependencyInjection;
 using TUnit.Core.Interfaces;
 
 namespace Schematic.AspNetCore.Tests.Infrastructure;

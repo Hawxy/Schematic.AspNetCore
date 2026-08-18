@@ -7,7 +7,7 @@ using Schematic.AspNetCore.Attributes;
 using Schematic.AspNetCore.Denial;
 using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Options;
-using Schematic.AspNetCore.Resolvers;
+using Schematic.DependencyInjection;
 using SchematicHQ.Client.RulesEngine;
 
 namespace Schematic.AspNetCore.Filters;

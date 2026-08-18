@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using Schematic.AspNetCore.Internal;
 using Schematic.AspNetCore.Options;
 using Schematic.AspNetCore.Resolvers;
 using Schematic.AspNetCore.Tests.Infrastructure;
+using Schematic.DependencyInjection;
 using Schematic.Extensions.AI;
 using Shouldly;
 

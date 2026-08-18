@@ -1,12 +1,13 @@
 using SchematicHQ.Client;
 using SchematicHQ.Client.RulesEngine;
 
-namespace Schematic.AspNetCore.Internal;
+namespace Schematic.DependencyInjection;
 
 /// <summary>
-/// Seam over the subset of <see cref="SchematicHQ.Client.Schematic"/> methods used by the AspNetCore
-/// filters. Exists primarily so the filters can be tested without a live Schematic backend; advanced
-/// callers can register their own implementation to add caching, batching, or per-tenant fan-out.
+/// Seam over the subset of <see cref="SchematicHQ.Client.Schematic"/> methods used by the Schematic
+/// integration packages (AspNetCore filters, AI middleware, Quartz listeners). Exists primarily so those
+/// components can be tested without a live Schematic backend; advanced callers can register their own
+/// implementation to add caching, batching, or per-tenant fan-out.
 /// Most consumers should not need to interact with this interface directly.
 /// </summary>
 public interface ISchematicGateClient

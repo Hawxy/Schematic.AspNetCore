@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Schematic.AspNetCore.Options;
 using Schematic.AspNetCore.Resolvers;
+using Schematic.DependencyInjection;
 
 namespace Schematic.AspNetCore.Internal;
 

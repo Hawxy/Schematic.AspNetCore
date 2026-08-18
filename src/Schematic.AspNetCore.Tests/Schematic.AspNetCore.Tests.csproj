@@ -18,6 +18,7 @@
       <ProjectReference Include="..\Schematic.AspNetCore.TestApp\Schematic.AspNetCore.TestApp.csproj" />
       <ProjectReference Include="..\Schematic.AspNetCore\Schematic.AspNetCore.csproj" />
       <ProjectReference Include="..\Schematic.Extensions.AI\Schematic.Extensions.AI.csproj" />
+      <ProjectReference Include="..\Schematic.Extensions.Quartz\Schematic.Extensions.Quartz.csproj" />
     </ItemGroup>
 
 </Project>

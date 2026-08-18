@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Schematic.AspNetCore.Resolvers;
+using Schematic.DependencyInjection;
 
 namespace Schematic.AspNetCore.Tests.Infrastructure;
 

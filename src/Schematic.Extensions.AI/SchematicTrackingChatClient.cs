@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using Schematic.AspNetCore.Internal;
+using Schematic.DependencyInjection;
 
 namespace Schematic.Extensions.AI;
 

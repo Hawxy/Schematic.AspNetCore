@@ -1,7 +1,7 @@
 using SchematicHQ.Client.RulesEngine;
 using SchematicClient = SchematicHQ.Client.Schematic;
 
-namespace Schematic.AspNetCore.Internal;
+namespace Schematic.DependencyInjection;
 
 internal sealed class SchematicGateClient : ISchematicGateClient
 {

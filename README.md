@@ -1,14 +1,22 @@
 # Schematic.AspNetCore
 
-ASP.NET Core integration for [Schematic](https://schematichq.com) entitlement management. Gate endpoints behind feature flags and entitlements, track usage events, and identify customers — declaratively, on top of the official [SchematicHQ.Client](https://www.nuget.org/packages/SchematicHQ.Client) SDK.
+ASP.NET Core integration for [Schematic](https://schematichq.com) entitlement management. 
 
-Two packages:
+This repo includes a number of packages that expand the official [SchematicHQ.Client](https://www.nuget.org/packages/SchematicHQ.Client) SDK with:
+- Automated entitlement checks & tracking for ASP.NET Core routes
+- Integration with `Microsoft.Extensions.AI` for usage reporting
+- Time-based trait reporting with `Quartz.NET`
+- DI extensions with `ILogger` wire-up
+- `FusionCache` distributed caching support
+
+Packages:
 
 | Package | Purpose |
 | --- | --- |
-| `Schematic.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring and shutdown event flushing, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider`. |
+| `Schematic.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider` and scheduled trait reporting. |
 | `Schematic.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
 | `Schematic.Extensions.AI` | [Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai) middleware: meter chat token usage and gate model calls behind entitlements. |
+| `Schematic.Extensions.Quartz` | [Quartz.NET](https://www.quartz-scheduler.net/) integration: gate and track scheduled jobs, and run trait reports on a cron schedule. |
 
 ## Quickstart
 
@@ -21,7 +29,7 @@ builder.Services.AddSchematicFlagContextResolver<MyFlagContextResolver>();
 
 var app = builder.Build();
 
-app.MapGroup(string.Empty).AddSchematicFilters().MapMyEndpoints();
+app.MapGroup("api").AddSchematicFilters().MapMyEndpoints();
 app.MapControllers().AddSchematicFilters();
 
 app.Run();
@@ -145,6 +153,54 @@ builder.Services.AddChatClient(sp => /* provider client */)
 ```
 
 Tracking reads each response's `UsageDetails` (streaming included — usage is aggregated across updates and recorded even if the consumer abandons the stream) and emits Track events: by default `ai.input-tokens` and `ai.output-tokens` with the model id as a trait, fully remappable via `options.MapUsage`. Identity comes from the ambient HTTP request's flag-context resolver; set `options.FallbackContext` for background/non-HTTP calls. Denied gating throws `SchematicFeatureDeniedException` (with `FlagKey`/`Reason`); check failures follow `options.FailurePolicy`. Tracking failures never fail the AI call.
+
+## Gating and tracking Quartz jobs
+
+`Schematic.Extensions.Quartz` applies the same gate/track model to scheduled jobs:
+
+```csharp
+builder.Services.AddSchematicQuartz();                 // options, resolver, listeners
+builder.Services.AddQuartz(q =>
+{
+    q.AddSchematic();                                  // wires the listeners into the scheduler
+});
+```
+
+Decorate job classes:
+
+```csharp
+[RequireFeature("nightly-sync")]                       // execution vetoed when not entitled
+[TrackFeature("nightly-sync-runs")]                    // tracked after each successful run
+public sealed class NightlySyncJob : IJob { ... }
+```
+
+The company/user identity comes from `schematic.company.*` / `schematic.user.*` entries in the merged job data map — declare them with `.UsingSchematicCompany("id", tenantId)` on the job or trigger builder, or register a custom `ISchematicJobContextResolver` (e.g. reading a tenant accessor). A vetoed execution skips that one firing; the trigger keeps its schedule. Check failures follow `AddSchematicQuartz(o => o.FailurePolicy = ...)`, and tracking failures never fail the job. A job that fans out over many tenants internally cannot be vetoed per-tenant — call `ISchematicGateClient` inside the loop instead.
+
+## Reporting traits on a schedule
+
+Traits hold stateful facts (seat counts, storage used) that entitlements compare against, and are usually computed from your own database. A report is a catalog (which tenants?) plus a source (what are this tenant's traits?):
+
+```csharp
+public sealed class TenantCatalog(CatalogDbContext db) : ISchematicTenantCatalog
+{
+    public IAsyncEnumerable<string> GetTenantIdsAsync(TraitReportContext context, CancellationToken ct)
+        => db.Tenants.Select(t => t.Id).AsAsyncEnumerable();
+}
+
+public sealed class SeatSource(ITenantDbContextFactory dbFactory) : ISchematicTraitReportSource
+{
+    public async Task<CompanyTraitReport?> GetReportAsync(string tenantId, TraitReportContext context, CancellationToken ct)
+    {
+        await using var db = dbFactory.CreateForTenant(tenantId);
+        return new(Keys: new() { ["id"] = tenantId },
+                   Traits: new() { ["seats"] = await db.Users.CountAsync(ct) });
+    }
+}
+
+builder.Services.AddSchematicTraitReport<TenantCatalog, SeatSource>("seats", o => o.Cron = "0 0 3 * * ?");
+```
+
+The source receives each tenant id and handles tenancy itself (a context factory, its own scope — whatever your app uses); return `null` to skip a tenant. Tenants are processed with bounded parallelism, so acquire per-tenant resources inside the call. With `AddSchematicQuartz`, every report that sets a cron runs on that schedule (missed runs fire once on startup; trait upserts are last-write-wins, so re-runs are safe). One failing tenant is logged and retried on the next run without sinking the rest. Reports without a cron — or apps not using Quartz — run on demand via `ISchematicTraitReportRunner.RunReportAsync("seats")`.
 
 ## Testing your app
 

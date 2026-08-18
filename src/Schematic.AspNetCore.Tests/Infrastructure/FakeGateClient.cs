@@ -1,4 +1,4 @@
-using Schematic.AspNetCore.Internal;
+using Schematic.DependencyInjection;
 using SchematicHQ.Client;
 using SchematicHQ.Client.RulesEngine;
 
