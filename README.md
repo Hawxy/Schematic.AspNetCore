@@ -154,6 +154,10 @@ builder.Services.AddChatClient(sp => /* provider client */)
 
 Tracking reads each response's `UsageDetails` (streaming included — usage is aggregated across updates and recorded even if the consumer abandons the stream) and emits Track events: by default `ai.input-tokens` and `ai.output-tokens` with the model id as a trait, fully remappable via `options.MapUsage`. Identity comes from the ambient HTTP request's flag-context resolver; set `options.FallbackContext` for background/non-HTTP calls. Denied gating throws `SchematicFeatureDeniedException` (with `FlagKey`/`Reason`); check failures follow `options.FailurePolicy`. Tracking failures never fail the AI call.
 
+Anything the provider reports in `UsageDetails.AdditionalCounts` — cache reads and writes, reasoning tokens — is passed through as `ai.{key}` with the key normalised to kebab-case, so a Bedrock response carrying `cache_read_input_tokens` also emits `ai.cache-read-input-tokens`. These are reported, not interpreted: create a feature only for the counts you want to meter, and check your provider's docs before adding them to the input count, because whether they are already inside `InputTokenCount` differs by provider (Anthropic reports cache buckets alongside it, OpenAI counts cached tokens within it).
+
+Metering token counts directly works when a feature's price is per token. To meter against **credits** instead, set the entitlement's `priceBehavior` to `credit_burndown` and give each event its own `creditConsumptionRate` — input and output tokens can burn the same credit at different rates, which keeps the price ratio between them in Schematic rather than hard-coded in a custom `MapUsage`.
+
 ## Gating and tracking Quartz jobs
 
 `SchematicHQ.Community.Extensions.Quartz` applies the same gate/track model to scheduled jobs:
@@ -202,9 +206,36 @@ builder.Services.AddSchematicTraitReport<TenantCatalog, SeatSource>("seats", o =
 
 The source receives each tenant id and handles tenancy itself (a context factory, its own scope — whatever your app uses); return `null` to skip a tenant. Tenants are processed with bounded parallelism, so acquire per-tenant resources inside the call. With `AddSchematicQuartz`, every report that sets a cron runs on that schedule (missed runs fire once on startup; trait upserts are last-write-wins, so re-runs are safe). One failing tenant is logged and retried on the next run without sinking the rest. Reports without a cron — or apps not using Quartz — run on demand via `ISchematicTraitReportRunner.RunReportAsync("seats")`.
 
+Set `o.ScheduleEnabled = false` to keep a report registered and on-demand runnable without anything firing it on a schedule:
+
+```csharp
+builder.Services.AddSchematicTraitReport<TenantCatalog, SeatSource>("seats", o =>
+{
+    o.Cron = "0 0 3 * * ?";
+    o.ScheduleEnabled = !builder.Environment.IsEnvironment("IntegrationTest");
+});
+```
+
+An integration test host that boots your real application would otherwise fan out over every tenant and write to Schematic partway through a suite. It also covers nominating one instance to own reporting when several run the same configuration.
+
 ## Testing your app
 
 The filters call Schematic through the `ISchematicGateClient` seam. Replace it in tests to run without a live Schematic backend, or register your own implementation to add caching or batching.
+
+For environments with no API key at all — tests, local development, CI, preview deployments — `AddSchematicNoOp()` registers a client that talks to nothing. `AddSchematic` rejects a missing key, and the filters, AI middlewares and Quartz listeners all take `ISchematicGateClient`, so without a stand-in the graph fails at resolve time. Branch on the key so that wiring stays unconditional and those code paths still execute off a key:
+
+```csharp
+var apiKey = builder.Configuration["Schematic:ApiKey"];
+
+if (!string.IsNullOrWhiteSpace(apiKey))
+    builder.Services.AddSchematic(apiKey);
+else
+    builder.Services.AddSchematicNoOp();       // Track/Identify discarded, checks allow
+
+builder.Services.AddSchematicAspNetCore();     // unchanged either way
+```
+
+Track and Identify are discarded, and entitlement checks resolve `true` so gated features stay reachable — pass `AddSchematicNoOp(allowAll: false)` to assert denial paths instead. Because it opens every gate, branch on whether a key is *configured*, not on whether one failed to load: reaching this in production would entitle everybody. Call it instead of `AddSchematic`, never as well as — whichever registers first wins.
 
 ## License
 

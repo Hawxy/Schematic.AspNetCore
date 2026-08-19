@@ -44,4 +44,33 @@ public static class DependencyInjectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers an <see cref="ISchematicGateClient"/> that talks to no backend, for environments with no
+    /// API key: tests, local development, CI, ephemeral preview deployments. Call it instead of
+    /// <see cref="AddSchematic(IServiceCollection, string)"/> — never as well as, since whichever runs
+    /// first wins — so the rest of the wiring (<c>AddSchematicAspNetCore</c>, the AI middlewares, the
+    /// Quartz listeners) stays unconditional and those code paths still execute off a key.
+    /// <para>
+    /// Track and Identify are discarded. Entitlement checks answer <paramref name="allowAll"/> without a
+    /// network call, so gated features behave as if every company were entitled. That is what makes a
+    /// keyless environment usable, and it is why reaching this in production would open every gate: branch
+    /// on whether a key is configured rather than making this the fallback for a key that failed to load.
+    /// </para>
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="allowAll">
+    /// What entitlement checks resolve to. <c>true</c> (the default) allows every gated feature; pass
+    /// <c>false</c> to deny instead, for tests asserting denial paths.
+    /// </param>
+    public static IServiceCollection AddSchematicNoOp(this IServiceCollection services, bool allowAll = true)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        // TryAdd for symmetry with AddSchematic: a client registered earlier by a test or an advanced
+        // caller keeps precedence.
+        services.TryAddSingleton<ISchematicGateClient>(new NoOpSchematicGateClient(allowAll));
+
+        return services;
+    }
 }

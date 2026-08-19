@@ -10,8 +10,9 @@ public static class SchematicQuartzServiceCollectionExtensions
     /// <summary>
     /// Registers the Schematic Quartz integration: options, the default job-data context resolver, the
     /// gate/track listeners, and a cron job + trigger for every trait report registered with
-    /// <see cref="TraitReportOptions.Cron"/> set. Pair with <c>AddQuartz(q =&gt; q.AddSchematic())</c>,
-    /// which wires the listeners into the scheduler.
+    /// <see cref="TraitReportOptions.Cron"/> set and <see cref="TraitReportOptions.ScheduleEnabled"/> left
+    /// on. Pair with <c>AddQuartz(q =&gt; q.AddSchematic())</c>, which wires the listeners into the
+    /// scheduler.
     /// </summary>
     public static IServiceCollection AddSchematicQuartz(
         this IServiceCollection services,
@@ -39,6 +40,11 @@ public static class SchematicQuartzServiceCollectionExtensions
                 foreach (var registration in registrations)
                 {
                     if (string.IsNullOrWhiteSpace(registration.Options.Cron))
+                        continue;
+
+                    // Registered but deliberately unscheduled — still runnable via
+                    // ISchematicTraitReportRunner. See TraitReportOptions.ScheduleEnabled.
+                    if (!registration.Options.ScheduleEnabled)
                         continue;
 
                     var jobKey = new JobKey($"trait-report-{registration.Name}", "schematic");
