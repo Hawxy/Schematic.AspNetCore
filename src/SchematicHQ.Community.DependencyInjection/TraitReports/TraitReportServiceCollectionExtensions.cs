@@ -9,7 +9,8 @@ public static class TraitReportServiceCollectionExtensions
     /// Registers a named trait report: <typeparamref name="TCatalog"/> enumerates the tenant ids each
     /// run and <typeparamref name="TSource"/> produces each tenant's traits. Requires the Schematic
     /// client (<c>AddSchematic</c>). Set <see cref="TraitReportOptions.Cron"/> to have a scheduler
-    /// adapter (e.g. SchematicHQ.Community.Extensions.Quartz) run it automatically; otherwise trigger it via
+    /// adapter (e.g. SchematicHQ.Community.Extensions.Quartz) run it automatically; otherwise — or with
+    /// <see cref="TraitReportOptions.ScheduleEnabled"/> off — trigger it via
     /// <see cref="ISchematicTraitReportRunner"/>.
     /// </summary>
     public static IServiceCollection AddSchematicTraitReport<TCatalog, TSource>(

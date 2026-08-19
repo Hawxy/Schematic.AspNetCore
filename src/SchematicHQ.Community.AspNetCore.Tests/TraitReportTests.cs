@@ -160,6 +160,57 @@ internal sealed class TraitReportTests
         ((ICronTrigger)trigger).CronExpressionString.ShouldBe("0 0 3 * * ?");
     }
 
+    /// <summary>
+    /// An integration test host boots the real application, cron and all. Without this it would fan out
+    /// over every tenant and write to Schematic partway through a suite.
+    /// </summary>
+    [Test]
+    public void Reports_with_scheduling_disabled_are_registered_but_not_scheduled()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSchematicTraitReport<ListTenantCatalog, SeatSource>("seats", o =>
+        {
+            o.Cron = "0 0 3 * * ?";
+            o.ScheduleEnabled = false;
+        });
+        services.AddSchematicQuartz();
+
+        var provider = services.BuildServiceProvider();
+
+        var quartzOptions = provider.GetRequiredService<IOptions<QuartzOptions>>().Value;
+        quartzOptions.JobDetails.ShouldBeEmpty();
+        quartzOptions.Triggers.ShouldBeEmpty();
+
+        // Still registered, so it remains runnable on demand.
+        provider.GetServices<SchematicTraitReportRegistration>()
+            .ShouldHaveSingleItem()
+            .Name.ShouldBe("seats");
+    }
+
+    [Test]
+    public async Task Unscheduled_reports_can_still_be_run_on_demand()
+    {
+        var catalog = new ListTenantCatalog { TenantIds = { "acme" } };
+        var pusher = new FakeTraitPusher();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(catalog);
+        services.AddSingleton(new SeatSource());
+        services.AddSingleton<ISchematicTraitPusher>(pusher);
+        services.AddSchematicTraitReport<ListTenantCatalog, SeatSource>("seats", o =>
+        {
+            o.Cron = "0 0 3 * * ?";
+            o.ScheduleEnabled = false;
+        });
+
+        var runner = services.BuildServiceProvider().GetRequiredService<ISchematicTraitReportRunner>();
+        var result = await runner.RunReportAsync("seats");
+
+        result.ShouldBe(new TraitReportResult(Succeeded: 1, Failed: 0));
+        pusher.Pushed.ShouldHaveSingleItem().Keys["id"].ShouldBe("acme");
+    }
+
     [Test]
     public async Task Trait_report_job_runs_the_named_report()
     {
