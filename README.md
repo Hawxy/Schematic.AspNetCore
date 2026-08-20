@@ -1,4 +1,4 @@
-# SchematicHQ.Community.AspNetCore
+# SchematicHQ.AspNetCore
 
 ASP.NET Core integration for [Schematic](https://schematichq.com) entitlement management. 
 
