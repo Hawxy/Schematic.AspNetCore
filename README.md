@@ -13,7 +13,7 @@ Packages:
 
 | Package | Purpose |
 | --- | --- |
-| `SchematicHQ.Community.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider` and scheduled trait reporting. |
+| `SchematicHQ.Community.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider`. |
 | `SchematicHQ.Community.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
 | `SchematicHQ.Community.Extensions.AI` | [Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai) middleware: meter chat token usage and gate model calls behind entitlements. |
 | `SchematicHQ.Community.Extensions.Quartz` | [Quartz.NET](https://www.quartz-scheduler.net/) integration: gate and track scheduled jobs, and run trait reports on a cron schedule. |
@@ -56,7 +56,9 @@ public sealed class MyFlagContextResolver : ISchematicFlagContextResolver
 
 For simple cases, a delegate works instead of a resolver class: `AddSchematicAspNetCore(o => o.ResolveContext = http => ...)`.
 
-The SDK buffers Track/Identify events and sends them periodically. `AddSchematic` registers a lifetime hook that calls `Schematic.Shutdown()` when the host's service provider is disposed, so events buffered at shutdown are flushed instead of lost (bounded at 10 seconds so a broken connection cannot hang shutdown).
+The SDK buffers Track/Identify events and sends them periodically. 
+
+`AddSchematic` registers a lifetime hook that calls `Schematic.Shutdown()` when the host's service provider is disposed, so events buffered at shutdown are flushed instead of lost (bounded at 10 seconds so a broken connection cannot hang shutdown).
 
 ## Gating endpoints
 
@@ -87,7 +89,7 @@ app.MapPost("/messages", SendMessage)
    .TrackFeature("messages-sent", quantity: 1);      // controllers: [TrackFeature("messages-sent")]
 ```
 
-Events are emitted only for successful (status < 400) responses, and a tracking failure never fails the response. `RequireFeature(..., track: true)` reuses the entitlement check result, so the SDK is called once per request.
+Events are emitted only for successful (status < 400) responses, and a tracking failure will never fail the response. `RequireFeature(..., track: true)` reuses the entitlement check result, so the SDK is called once per request.
 
 ## Identifying customers
 
@@ -152,11 +154,13 @@ builder.Services.AddChatClient(sp => /* provider client */)
     .UseSchematicUsageTracking();                    // then meter what allowed calls consume
 ```
 
-Tracking reads each response's `UsageDetails` (streaming included — usage is aggregated across updates and recorded even if the consumer abandons the stream) and emits Track events: by default `ai.input-tokens` and `ai.output-tokens` with the model id as a trait, fully remappable via `options.MapUsage`. Identity comes from the ambient HTTP request's flag-context resolver; set `options.FallbackContext` for background/non-HTTP calls. Denied gating throws `SchematicFeatureDeniedException` (with `FlagKey`/`Reason`); check failures follow `options.FailurePolicy`. Tracking failures never fail the AI call.
+Tracking reads each response's `UsageDetails` (streaming is included as usage is aggregated across updates and recorded even if the consumer abandons the stream). 
 
-Anything the provider reports in `UsageDetails.AdditionalCounts` — cache reads and writes, reasoning tokens — is passed through as `ai.{key}` with the key normalised to kebab-case, so a Bedrock response carrying `cache_read_input_tokens` also emits `ai.cache-read-input-tokens`. These are reported, not interpreted: create a feature only for the counts you want to meter, and check your provider's docs before adding them to the input count, because whether they are already inside `InputTokenCount` differs by provider (Anthropic reports cache buckets alongside it, OpenAI counts cached tokens within it).
+By default, track events take  `ai.input-tokens` and `ai.output-tokens` as an input and pass the the model id as a trait, fully remappable via `options.MapUsage`. Identity comes from the ambient HTTP request's flag-context resolver, set `options.FallbackContext` for background/non-HTTP calls. Denied gating throws `SchematicFeatureDeniedException` (with `FlagKey`/`Reason`). Check failures follow `options.FailurePolicy`. Tracking failures will never fail the AI call.
 
-Metering token counts directly works when a feature's price is per token. To meter against **credits** instead, set the entitlement's `priceBehavior` to `credit_burndown` and give each event its own `creditConsumptionRate` — input and output tokens can burn the same credit at different rates, which keeps the price ratio between them in Schematic rather than hard-coded in a custom `MapUsage`.
+Anything the provider reports in `UsageDetails.AdditionalCounts` (such as cache reads and writes or reasoning tokens) is passed through as `ai.{key}` with the key normalised to kebab-case, so a Bedrock response carrying `cache_read_input_tokens` also emits `ai.cache-read-input-tokens`. Check your provider's docs before adding them to the input count, because whether they are already inside `InputTokenCount` differs by provider (Anthropic reports cache buckets alongside it, OpenAI counts cached tokens within it).
+
+Implementation note: Metering token counts directly works when a feature's price is per token. To meter against **credits** instead, set the entitlement's `priceBehavior` to `credit_burndown` and give each event its own `creditConsumptionRate`. Input and output tokens can burn the same credit at different rates, which keeps the price ratio between them in Schematic rather than hard-coded in a custom `MapUsage`.
 
 ## Gating and tracking Quartz jobs
 
@@ -178,7 +182,9 @@ Decorate job classes:
 public sealed class NightlySyncJob : IJob { ... }
 ```
 
-The company/user identity comes from `schematic.company.*` / `schematic.user.*` entries in the merged job data map — declare them with `.UsingSchematicCompany("id", tenantId)` on the job or trigger builder, or register a custom `ISchematicJobContextResolver` (e.g. reading a tenant accessor). A vetoed execution skips that one firing; the trigger keeps its schedule. Check failures follow `AddSchematicQuartz(o => o.FailurePolicy = ...)`, and tracking failures never fail the job. A job that fans out over many tenants internally cannot be vetoed per-tenant — call `ISchematicGateClient` inside the loop instead.
+The company/user identity comes from `schematic.company.*` / `schematic.user.*` entries in the merged job data map, declare them with `.UsingSchematicCompany("id", tenantId)` on the job or trigger builder, or register a custom `ISchematicJobContextResolver`. 
+
+Check failures follow `AddSchematicQuartz(o => o.FailurePolicy = ...)`, and tracking failures never fail the job. 
 
 ## Reporting traits on a schedule
 
@@ -204,7 +210,7 @@ public sealed class SeatSource(ITenantDbContextFactory dbFactory) : ISchematicTr
 builder.Services.AddSchematicTraitReport<TenantCatalog, SeatSource>("seats", o => o.Cron = "0 0 3 * * ?");
 ```
 
-The source receives each tenant id and handles tenancy itself (a context factory, its own scope — whatever your app uses); return `null` to skip a tenant. Tenants are processed with bounded parallelism, so acquire per-tenant resources inside the call. With `AddSchematicQuartz`, every report that sets a cron runs on that schedule (missed runs fire once on startup; trait upserts are last-write-wins, so re-runs are safe). One failing tenant is logged and retried on the next run without sinking the rest. Reports without a cron — or apps not using Quartz — run on demand via `ISchematicTraitReportRunner.RunReportAsync("seats")`.
+The source receives each tenant id and handles tenancy itself, return `null` to skip a tenant. Tenants are processed with bounded parallelism, so you're safe to acquire per-tenant resources inside the call. With `AddSchematicQuartz`, every report that sets a cron runs on that schedule (missed runs fire once on startup; trait upserts are last-write-wins, so re-runs are safe). One failing tenant is logged and retried on the next run without sinking the rest. Reports without a cron — or apps not using Quartz — run on demand via `ISchematicTraitReportRunner.RunReportAsync("seats")`.
 
 Set `o.ScheduleEnabled = false` to keep a report registered and on-demand runnable without anything firing it on a schedule:
 
