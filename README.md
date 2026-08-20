@@ -141,7 +141,9 @@ builder.Services.AddSchematicFusionCache();          // or AddSchematicFusionCac
 builder.Services.AddSchematic(apiKey);               // picks up the registered ICacheProvider
 ```
 
-`AddSchematic` wires any DI-registered `ICacheProvider` into `ClientOptions.CacheProvider` unless one was set explicitly, so custom providers plug in the same way. Entries use the SDK's built-in default cache TTL (5 seconds) unless the SDK passes a per-entry TTL; pass `AddSchematicFusionCache(defaultTtl: ...)` to change it. Note: FusionCache does not support key enumeration, so the provider's `DeleteMissing` is a no-op — stale entries age out via TTL. The SDK's datastream mode (`options.UseDatastream`) relies on `DeleteMissing` to sweep deleted flags during bulk sync, so prefer the SDK's built-in Redis/local cache configuration over this provider when enabling datastream.
+`AddSchematic` wires any DI-registered `ICacheProvider` into `ClientOptions.CacheProvider` unless one was set explicitly, so custom providers plug in the same way. Entries use the SDK's built-in default cache TTL (5 seconds) unless the SDK passes a per-entry TTL, pass `AddSchematicFusionCache(defaultTtl: ...)` to change it. 
+
+Note: FusionCache does not support key enumeration, so the provider's `DeleteMissing` is a no-op. The SDK's Datastream functionality (`options.UseDatastream`), where a sidecar is used to cache entitlement state, should not be used when utilizing FusionCache or a custom distributed cache as it's redundant and may cause issues.
 
 ## Metering AI usage
 
