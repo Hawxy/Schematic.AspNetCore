@@ -60,7 +60,7 @@ The SDK buffers Track/Identify events and sends them periodically.
 
 `AddSchematic` registers a lifetime hook that calls `Schematic.Shutdown()` when the host's service provider is disposed, so events buffered at shutdown are flushed instead of lost (bounded at 10 seconds so a broken connection cannot hang shutdown).
 
-## Gating endpoints
+### Gating endpoints
 
 Minimal APIs:
 
@@ -82,7 +82,7 @@ public IActionResult GetReports() => ...;
 
 A denied check returns RFC 7807 ProblemDetails with status 403, plus `featureId` and `accessDeniedReason` extension fields. Customize with `options.OnDenied`.
 
-## Tracking usage
+### Tracking usage
 
 ```csharp
 app.MapPost("/messages", SendMessage)
@@ -91,7 +91,7 @@ app.MapPost("/messages", SendMessage)
 
 Events are emitted only for successful (status < 400) responses, and a tracking failure will never fail the response. `RequireFeature(..., track: true)` reuses the entitlement check result, so the SDK is called once per request.
 
-## Identifying customers
+### Identifying customers
 
 ```csharp
 builder.Services.AddSchematicIdentifyContextResolver<MyIdentifyResolver>();
@@ -101,7 +101,7 @@ app.UseSchematicIdentify();
 
 Calls `Schematic.Identify` for each request whose resolver returns an identity. Set `options.IdentifyDeduplicationWindow` to send at most one Identify per identity per window.
 
-## Receiving webhooks
+### Receiving webhooks
 
 Verify inbound [Schematic webhooks](https://docs.schematichq.com/integrations/webhooks) with the signing secret from the dashboard:
 
@@ -114,7 +114,7 @@ app.MapPost("/webhooks/schematic", (JsonElement payload) => Results.Ok())
 
 The filter validates the `X-Schematic-Webhook-Signature` / `X-Schematic-Webhook-Timestamp` headers against the raw request body (via the SDK's `WebhookVerifier`) before the endpoint runs, responding 401 ProblemDetails when they are missing or invalid. The body remains readable by the endpoint afterwards.
 
-## Options
+### Options
 
 ```csharp
 builder.Services.AddSchematicAspNetCore(options =>
@@ -188,7 +188,7 @@ The company/user identity comes from `schematic.company.*` / `schematic.user.*` 
 
 Check failures follow `AddSchematicQuartz(o => o.FailurePolicy = ...)`, and tracking failures never fail the job. 
 
-## Reporting traits on a schedule
+### Reporting traits on a schedule
 
 Traits hold stateful facts (seat counts, storage used) that entitlements compare against, and are usually computed from your own database. A report is a catalog (which tenants?) plus a source (what are this tenant's traits?):
 
