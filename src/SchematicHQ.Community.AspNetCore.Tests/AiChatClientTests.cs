@@ -7,41 +7,12 @@ using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.Extensions.AI;
 using Shouldly;
+using static SchematicHQ.Community.AspNetCore.Tests.Infrastructure.AiTestPipeline;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
 internal sealed class AiChatClientTests
 {
-    private static readonly SchematicFlagContext Identity = new(
-        Company: new() { ["id"] = "company_ai" },
-        User: new() { ["id"] = "user_ai" });
-
-    private static IChatClient BuildPipeline(
-        StubChatClient inner,
-        FakeGateClient fake,
-        Func<ChatClientBuilder, ChatClientBuilder> configurePipeline,
-        Action<IServiceCollection>? configureServices = null)
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<ISchematicGateClient>(fake);
-        configureServices?.Invoke(services);
-
-        return configurePipeline(new ChatClientBuilder(inner)).Build(services.BuildServiceProvider());
-    }
-
-    private static ChatResponse ResponseWithUsage(long input, long output, string? modelId = "test-model") =>
-        new(new ChatMessage(ChatRole.Assistant, "hello"))
-        {
-            ModelId = modelId,
-            Usage = new UsageDetails
-            {
-                InputTokenCount = input,
-                OutputTokenCount = output,
-                TotalTokenCount = input + output,
-            },
-        };
-
     [Test]
     public async Task Tracking_emits_default_input_and_output_events_with_model_trait()
     {

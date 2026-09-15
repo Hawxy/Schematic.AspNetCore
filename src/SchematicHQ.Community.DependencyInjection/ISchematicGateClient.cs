@@ -43,12 +43,13 @@ public interface ISchematicGateClient
 
     /// <summary>
     /// Reserves <paramref name="requestedAmount"/> credits of <paramref name="creditTypeId"/> for
-    /// <paramref name="companyId"/> (Schematic's company id, not the company keys). Events sent with
-    /// <see cref="TrackAgainstLeaseAsync"/> settle from the hold; <see cref="ReleaseCreditLeaseAsync"/>
-    /// returns what was not tracked. Custom implementations that do not support leases can leave the
-    /// default, which throws <see cref="NotSupportedException"/>.
+    /// <paramref name="companyId"/> (Schematic's company id, not the company keys). Returns <c>null</c>
+    /// when Schematic will not fund the hold, i.e. the company lacks the credit; any other failure
+    /// throws. Events sent with <see cref="TrackAgainstLeaseAsync"/> settle from the hold and
+    /// <see cref="ReleaseCreditLeaseAsync"/> returns what was not tracked. Custom implementations that
+    /// do not support leases can leave the default, which throws <see cref="NotSupportedException"/>.
     /// </summary>
-    Task<SchematicCreditLease> AcquireCreditLeaseAsync(
+    Task<SchematicCreditLease?> AcquireCreditLeaseAsync(
         string companyId,
         string creditTypeId,
         double requestedAmount,
@@ -57,10 +58,7 @@ public interface ISchematicGateClient
         => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
 
     /// <summary>Adds <paramref name="additionalAmount"/> credits to an open lease.</summary>
-    Task<SchematicCreditLease> ExtendCreditLeaseAsync(
-        string leaseId,
-        double additionalAmount,
-        CancellationToken cancellationToken)
+    Task ExtendCreditLeaseAsync(string leaseId, double additionalAmount, CancellationToken cancellationToken)
         => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
 
     /// <summary>Closes a lease, returning its untracked remainder to the company's balance.</summary>

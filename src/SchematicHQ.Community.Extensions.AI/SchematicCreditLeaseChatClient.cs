@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using SchematicHQ.Client;
-using SchematicHQ.Client.RulesEngine;
 using SchematicHQ.Community.DependencyInjection;
 
 namespace SchematicHQ.Community.Extensions.AI;
@@ -48,12 +47,14 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var call = await BeginAsync(messages, options, cancellationToken);
+        // Estimation enumerates the messages once already; do not hand a lazy sequence downstream.
+        var history = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        var call = await BeginAsync(history, options, cancellationToken);
 
         ChatResponse response;
         try
         {
-            response = await base.GetResponseAsync(messages, options, cancellationToken);
+            response = await base.GetResponseAsync(history, options, cancellationToken);
         }
         catch
         {
@@ -70,82 +71,56 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var call = await BeginAsync(messages, options, cancellationToken);
+        var history = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        var call = await BeginAsync(history, options, cancellationToken);
 
-        UsageDetails? usage = null;
-        string? modelId = null;
+        var usage = new AiUsageAccumulator();
         try
         {
-            await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken))
+            await foreach (var update in base.GetStreamingResponseAsync(history, options, cancellationToken))
             {
-                modelId ??= update.ModelId;
-                foreach (var content in update.Contents)
-                {
-                    if (content is UsageContent usageContent)
-                        (usage ??= new UsageDetails()).Add(usageContent.Details);
-                }
-
+                usage.Add(update);
                 yield return update;
             }
         }
         finally
         {
-            await SettleAsync(call, usage, modelId);
+            await SettleAsync(call, usage.Usage, usage.ModelId);
         }
     }
 
     /// <summary>Gates the call and, for a credit-backed entitlement, takes the hold.</summary>
     private async ValueTask<CallState> BeginAsync(
-        IEnumerable<ChatMessage> messages,
+        IReadOnlyList<ChatMessage> messages,
         ChatOptions? options,
         CancellationToken cancellationToken)
     {
-        var context = await AiFlagContextResolution.ResolveAsync(_httpContextAccessor, _options)
-            ?? throw new SchematicFeatureDeniedException(_flagKey, "no_schematic_context");
+        var gate = await AiEntitlementGate.CheckAsync(_schematic, _flagKey, _options, _httpContextAccessor, _logger, cancellationToken);
 
-        CheckFlagWithEntitlementResponse response;
-        try
+        var entitlement = gate.Response?.Entitlement;
+        var companyId = gate.Response?.CompanyId;
+        if (entitlement?.CreditId is null || entitlement.ConsumptionRate is null || companyId is null)
         {
-            response = await _schematic.CheckFlagWithEntitlementAsync(_flagKey, context.Company, context.User, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Schematic entitlement check for flag '{FlagKey}' failed; applying {FailurePolicy}.",
-                _flagKey, _options.FailurePolicy);
+            if (gate.Response is not null)
+            {
+                _logger.LogDebug(
+                    "Flag '{FlagKey}' is not backed by a credit entitlement; usage is tracked without a lease.",
+                    _flagKey);
+            }
 
-            if (_options.FailurePolicy == SchematicFailurePolicy.FailOpen)
-                return new CallState(context, null, null);
-
-            throw new SchematicFeatureDeniedException(_flagKey, "entitlement_check_failed", ex);
+            return new CallState(gate.Context, null);
         }
 
-        if (!response.Value)
-            throw new SchematicFeatureDeniedException(_flagKey, response.Reason);
-
-        var entitlement = response.Entitlement;
-        if (entitlement?.CreditId is null || entitlement.ConsumptionRate is null || response.CompanyId is null)
-        {
-            _logger.LogDebug(
-                "Flag '{FlagKey}' is not backed by a credit entitlement; usage is tracked without a lease.",
-                _flagKey);
-            return new CallState(context, null, null);
-        }
-
-        var estimate = MapEvents(_options.EstimateUsage(messages, options), options?.ModelId);
+        var estimate = AiUsageTracking.MapEvents(_options, _options.EstimateUsage(messages, options), options?.ModelId);
         var hold = _options.CreditCost(estimate, entitlement);
         if (hold <= 0)
-            return new CallState(context, entitlement, null);
+            return new CallState(gate.Context, null);
 
-        SchematicCreditLease lease;
+        SchematicCreditLease? lease;
         try
         {
             lease = await _schematic.AcquireCreditLeaseAsync(
-                response.CompanyId,
+                companyId,
                 entitlement.CreditId,
                 hold,
                 DateTime.UtcNow.Add(_options.LeaseDuration),
@@ -155,14 +130,6 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         {
             throw;
         }
-        catch (SchematicApiException ex) when (ex.StatusCode is 400 or 402 or 409 or 422)
-        {
-            // The API rejected the hold itself: not enough credit to cover the estimate.
-            _logger.LogInformation(
-                "Schematic refused a {Hold} credit hold for flag '{FlagKey}' (HTTP {StatusCode}); call denied.",
-                hold, _flagKey, ex.StatusCode);
-            throw new SchematicFeatureDeniedException(_flagKey, "insufficient_credits", ex);
-        }
         catch (Exception ex)
         {
             _logger.LogError(ex,
@@ -170,18 +137,19 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
                 _flagKey, _options.FailurePolicy);
 
             if (_options.FailurePolicy == SchematicFailurePolicy.FailOpen)
-                return new CallState(context, entitlement, null);
+                return new CallState(gate.Context, null);
 
             throw new SchematicFeatureDeniedException(_flagKey, "credit_lease_failed", ex);
         }
 
-        if (lease.GrantedAmount <= 0)
+        if (lease is null)
         {
-            await ReleaseQuietlyAsync(lease.Id);
+            _logger.LogInformation(
+                "Schematic refused a {Hold} credit hold for flag '{FlagKey}'; call denied.", hold, _flagKey);
             throw new SchematicFeatureDeniedException(_flagKey, "insufficient_credits");
         }
 
-        return new CallState(context, entitlement, lease);
+        return new CallState(gate.Context, new Hold(lease, entitlement));
     }
 
     /// <summary>
@@ -192,24 +160,24 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
     {
         try
         {
-            var events = usage is null ? [] : MapEvents(usage, modelId);
+            IReadOnlyList<SchematicAiUsageEvent> events = usage is null ? [] : AiUsageTracking.MapEvents(_options, usage, modelId);
 
-            if (call.Lease is null)
+            if (call.Hold is null)
             {
                 foreach (var usageEvent in events)
-                    TrackBuffered(call.Context, usageEvent);
+                    AiUsageTracking.TrackBuffered(_schematic, call.Context, usageEvent);
                 return;
             }
 
             if (events.Count == 0)
                 return;
 
-            var cost = _options.CreditCost(events, call.Entitlement!);
-            if (cost > call.Lease.GrantedAmount)
-                await ExtendQuietlyAsync(call.Lease.Id, cost - call.Lease.GrantedAmount);
+            var cost = _options.CreditCost(events, call.Hold.Entitlement);
+            if (cost > call.Hold.Lease.GrantedAmount)
+                await ExtendQuietlyAsync(call.Hold.Lease.Id, cost - call.Hold.Lease.GrantedAmount);
 
             foreach (var usageEvent in events)
-                await TrackAgainstLeaseQuietlyAsync(call.Lease.Id, call.Context, usageEvent);
+                await TrackAgainstLeaseQuietlyAsync(call.Hold.Lease.Id, call.Context, usageEvent);
         }
         catch (Exception ex)
         {
@@ -217,18 +185,9 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         }
         finally
         {
-            if (call.Lease is not null)
-                await ReleaseQuietlyAsync(call.Lease.Id);
+            if (call.Hold is not null)
+                await ReleaseQuietlyAsync(call.Hold.Lease.Id);
         }
-    }
-
-    private IReadOnlyList<SchematicAiUsageEvent> MapEvents(UsageDetails usage, string? modelId)
-        => _options.MapUsage(usage, modelId).Where(static e => e.Quantity > 0).ToArray();
-
-    private void TrackBuffered(SchematicFlagContext context, SchematicAiUsageEvent usageEvent)
-    {
-        var quantity = (int)Math.Min(usageEvent.Quantity, int.MaxValue);
-        _schematic.Track(usageEvent.EventName, context.Company, context.User, usageEvent.Traits ?? new(), quantity);
     }
 
     private async ValueTask TrackAgainstLeaseQuietlyAsync(string leaseId, SchematicFlagContext context, SchematicAiUsageEvent usageEvent)
@@ -245,7 +204,7 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
             _logger.LogError(ex,
                 "Tracking '{EventName}' against Schematic lease {LeaseId} failed; sending without the lease.",
                 usageEvent.EventName, leaseId);
-            TrackBuffered(context, usageEvent);
+            AiUsageTracking.TrackBuffered(_schematic, context, usageEvent);
         }
     }
 
@@ -276,8 +235,7 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         }
     }
 
-    private sealed record CallState(
-        SchematicFlagContext Context,
-        RulesengineFeatureEntitlement? Entitlement,
-        SchematicCreditLease? Lease);
+    private sealed record Hold(SchematicCreditLease Lease, RulesengineFeatureEntitlement Entitlement);
+
+    private sealed record CallState(SchematicFlagContext Context, Hold? Hold);
 }

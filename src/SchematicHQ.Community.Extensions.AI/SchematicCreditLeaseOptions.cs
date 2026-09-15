@@ -9,13 +9,14 @@ namespace SchematicHQ.Community.Extensions.AI;
 /// </summary>
 public sealed class SchematicCreditLeaseOptions : SchematicAiOptions
 {
+    private const int DefaultOutputTokens = 1024;
+
     /// <summary>
     /// Estimates the usage a call will consume, before the model is invoked, so the hold can be sized.
     /// Defaults to <see cref="DefaultUsageEstimate"/>: roughly four characters per input token, and
     /// <see cref="ChatOptions.MaxOutputTokens"/> (or 1024 when unset) output tokens.
     /// </summary>
-    public Func<IEnumerable<ChatMessage>, ChatOptions?, UsageDetails> EstimateUsage { get; set; }
-        = static (messages, options) => DefaultUsageEstimate(messages, options);
+    public Func<IEnumerable<ChatMessage>, ChatOptions?, UsageDetails> EstimateUsage { get; set; } = DefaultUsageEstimate;
 
     /// <summary>
     /// Converts the events <see cref="SchematicAiOptions.MapUsage"/> produced into a credit amount for the
@@ -32,19 +33,22 @@ public sealed class SchematicCreditLeaseOptions : SchematicAiOptions
     /// </summary>
     public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(10);
 
-    public static UsageDetails DefaultUsageEstimate(
-        IEnumerable<ChatMessage> messages,
-        ChatOptions? options,
-        int defaultOutputTokens = 1024)
+    public static UsageDetails DefaultUsageEstimate(IEnumerable<ChatMessage> messages, ChatOptions? options)
     {
         long characters = 0;
         foreach (var message in messages)
-            characters += message.Text.Length;
+        {
+            foreach (var content in message.Contents)
+            {
+                if (content is TextContent text)
+                    characters += text.Text.Length;
+            }
+        }
 
         return new UsageDetails
         {
             InputTokenCount = (characters + 3) / 4,
-            OutputTokenCount = options?.MaxOutputTokens ?? defaultOutputTokens,
+            OutputTokenCount = options?.MaxOutputTokens ?? DefaultOutputTokens,
         };
     }
 

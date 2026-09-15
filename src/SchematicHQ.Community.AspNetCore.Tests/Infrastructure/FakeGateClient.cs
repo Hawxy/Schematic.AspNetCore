@@ -57,11 +57,11 @@ internal sealed class FakeGateClient : ISchematicGateClient
     public bool ThrowOnIdentify { get; set; }
     public bool ThrowOnLeaseTrack { get; set; }
 
+    /// <summary>Answer every lease request with "insufficient credit" (a null lease).</summary>
+    public bool RejectLease { get; set; }
+
     /// <summary>Thrown from <see cref="AcquireCreditLeaseAsync"/> when set.</summary>
     public Exception? ThrowOnAcquireLease { get; set; }
-
-    /// <summary>Overrides the granted amount; by default a lease grants what was requested.</summary>
-    public double? GrantedAmountOverride { get; set; }
 
     public void Reset()
     {
@@ -71,8 +71,8 @@ internal sealed class FakeGateClient : ISchematicGateClient
             ThrowOnTrack = false;
             ThrowOnIdentify = false;
             ThrowOnLeaseTrack = false;
+            RejectLease = false;
             ThrowOnAcquireLease = null;
-            GrantedAmountOverride = null;
             CheckCalls.Clear();
             TrackCalls.Clear();
             IdentifyCalls.Clear();
@@ -139,7 +139,7 @@ internal sealed class FakeGateClient : ISchematicGateClient
         }
     }
 
-    public Task<SchematicCreditLease> AcquireCreditLeaseAsync(
+    public Task<SchematicCreditLease?> AcquireCreditLeaseAsync(
         string companyId,
         string creditTypeId,
         double requestedAmount,
@@ -151,25 +151,17 @@ internal sealed class FakeGateClient : ISchematicGateClient
             LeaseCalls.Add(new LeaseCall(companyId, creditTypeId, requestedAmount, expiresAt));
             if (ThrowOnAcquireLease is not null)
                 throw ThrowOnAcquireLease;
+            if (RejectLease)
+                return Task.FromResult<SchematicCreditLease?>(null);
 
-            var id = $"lease_{++_leaseCounter}";
-            return Task.FromResult(new SchematicCreditLease(
-                id, companyId, creditTypeId, GrantedAmountOverride ?? requestedAmount, 0,
-                expiresAt ?? DateTime.UtcNow.AddMinutes(10)));
+            return Task.FromResult<SchematicCreditLease?>(new($"lease_{++_leaseCounter}", requestedAmount));
         }
     }
 
-    public Task<SchematicCreditLease> ExtendCreditLeaseAsync(
-        string leaseId,
-        double additionalAmount,
-        CancellationToken cancellationToken)
+    public Task ExtendCreditLeaseAsync(string leaseId, double additionalAmount, CancellationToken cancellationToken)
     {
-        lock (_lock)
-        {
-            ExtendLeaseCalls.Add(new ExtendLeaseCall(leaseId, additionalAmount));
-            return Task.FromResult(new SchematicCreditLease(
-                leaseId, "company_1", "credit_1", additionalAmount, 0, DateTime.UtcNow.AddMinutes(10)));
-        }
+        lock (_lock) ExtendLeaseCalls.Add(new ExtendLeaseCall(leaseId, additionalAmount));
+        return Task.CompletedTask;
     }
 
     public Task ReleaseCreditLeaseAsync(string leaseId, CancellationToken cancellationToken)

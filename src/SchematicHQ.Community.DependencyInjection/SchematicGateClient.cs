@@ -39,38 +39,45 @@ internal sealed class SchematicGateClient : ISchematicGateClient
         IdentifyOptions? options = null)
         => _client.Identify(keys, company, name, traits, options);
 
-    public async Task<SchematicCreditLease> AcquireCreditLeaseAsync(
+    public async Task<SchematicCreditLease?> AcquireCreditLeaseAsync(
         string companyId,
         string creditTypeId,
         double requestedAmount,
         DateTime? expiresAt,
         CancellationToken cancellationToken)
     {
-        var response = await _client.Credits.AcquireCreditLeaseAsync(
-            new AcquireCreditLeaseRequestBody
-            {
-                CompanyId = companyId,
-                CreditTypeId = creditTypeId,
-                RequestedAmount = requestedAmount,
-                ExpiresAt = expiresAt,
-            },
-            cancellationToken: cancellationToken);
+        AcquireCreditLeaseResponse response;
+        try
+        {
+            response = await _client.Credits.AcquireCreditLeaseAsync(
+                new AcquireCreditLeaseRequestBody
+                {
+                    CompanyId = companyId,
+                    CreditTypeId = creditTypeId,
+                    RequestedAmount = requestedAmount,
+                    ExpiresAt = expiresAt,
+                },
+                cancellationToken: cancellationToken);
+        }
+        // A hold the API cannot fund comes back as a payment/conflict/unprocessable status.
+        catch (SchematicApiException ex) when (ex.StatusCode is 402 or 409 or 422)
+        {
+            return null;
+        }
 
-        return ToLease(response.Data);
+        var lease = response.Data;
+        if (lease.GrantedAmount > 0)
+            return new SchematicCreditLease(lease.Id, lease.GrantedAmount);
+
+        await _client.Credits.ReleaseCreditLeaseAsync(lease.Id, cancellationToken: cancellationToken);
+        return null;
     }
 
-    public async Task<SchematicCreditLease> ExtendCreditLeaseAsync(
-        string leaseId,
-        double additionalAmount,
-        CancellationToken cancellationToken)
-    {
-        var response = await _client.Credits.ExtendCreditLeaseAsync(
+    public async Task ExtendCreditLeaseAsync(string leaseId, double additionalAmount, CancellationToken cancellationToken)
+        => await _client.Credits.ExtendCreditLeaseAsync(
             leaseId,
             new ExtendCreditLeaseRequestBody { AdditionalAmount = additionalAmount },
             cancellationToken: cancellationToken);
-
-        return ToLease(response.Data);
-    }
 
     public async Task ReleaseCreditLeaseAsync(string leaseId, CancellationToken cancellationToken)
         => await _client.Credits.ReleaseCreditLeaseAsync(leaseId, cancellationToken: cancellationToken);
@@ -100,7 +107,4 @@ internal sealed class SchematicGateClient : ISchematicGateClient
             },
             cancellationToken: cancellationToken);
     }
-
-    private static SchematicCreditLease ToLease(CreditLeaseResponseData data)
-        => new(data.Id, data.CompanyId, data.CreditTypeId, data.GrantedAmount, data.TrackedAmount, data.ExpiresAt);
 }

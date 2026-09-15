@@ -51,26 +51,18 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        UsageDetails? usage = null;
-        string? modelId = null;
-
+        var usage = new AiUsageAccumulator();
         try
         {
             await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken))
             {
-                modelId ??= update.ModelId;
-                foreach (var content in update.Contents)
-                {
-                    if (content is UsageContent usageContent)
-                        (usage ??= new UsageDetails()).Add(usageContent.Details);
-                }
-
+                usage.Add(update);
                 yield return update;
             }
         }
         finally
         {
-            await TrackUsageAsync(usage, modelId);
+            await TrackUsageAsync(usage.Usage, usage.ModelId);
         }
     }
 
@@ -88,14 +80,8 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
                 return;
             }
 
-            foreach (var usageEvent in _options.MapUsage(usage, modelId))
-            {
-                if (usageEvent.Quantity <= 0)
-                    continue;
-
-                var quantity = (int)Math.Min(usageEvent.Quantity, int.MaxValue);
-                _schematic.Track(usageEvent.EventName, context.Company, context.User, usageEvent.Traits ?? new(), quantity);
-            }
+            foreach (var usageEvent in AiUsageTracking.MapEvents(_options, usage, modelId))
+                AiUsageTracking.TrackBuffered(_schematic, context, usageEvent);
         }
         catch (Exception ex)
         {

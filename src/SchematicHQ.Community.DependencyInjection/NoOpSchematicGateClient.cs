@@ -49,21 +49,16 @@ internal sealed class NoOpSchematicGateClient : ISchematicGateClient
     {
     }
 
-    public Task<SchematicCreditLease> AcquireCreditLeaseAsync(
+    public Task<SchematicCreditLease?> AcquireCreditLeaseAsync(
         string companyId,
         string creditTypeId,
         double requestedAmount,
         DateTime? expiresAt,
         CancellationToken cancellationToken)
-        => Task.FromResult(new SchematicCreditLease(
-            "noop", companyId, creditTypeId, requestedAmount, 0, expiresAt ?? DateTime.UtcNow.AddMinutes(10)));
+        => Task.FromResult<SchematicCreditLease?>(new("noop", requestedAmount));
 
-    public Task<SchematicCreditLease> ExtendCreditLeaseAsync(
-        string leaseId,
-        double additionalAmount,
-        CancellationToken cancellationToken)
-        => Task.FromResult(new SchematicCreditLease(
-            leaseId, string.Empty, string.Empty, additionalAmount, 0, DateTime.UtcNow.AddMinutes(10)));
+    public Task ExtendCreditLeaseAsync(string leaseId, double additionalAmount, CancellationToken cancellationToken)
+        => Task.CompletedTask;
 
     public Task ReleaseCreditLeaseAsync(string leaseId, CancellationToken cancellationToken)
         => Task.CompletedTask;

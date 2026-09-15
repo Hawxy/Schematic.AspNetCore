@@ -25,8 +25,9 @@ public class SchematicAiOptions
     public SchematicFlagContext? FallbackContext { get; set; }
 
     /// <summary>
-    /// How <c>UseSchematicRequireFeature</c> behaves when the entitlement check throws.
-    /// <see cref="SchematicFailurePolicy.FailClosed"/> (the default) denies the call.
+    /// How a gated call behaves when the entitlement check throws, or when <c>UseSchematicCreditLease</c>
+    /// cannot acquire its hold. <see cref="SchematicFailurePolicy.FailClosed"/> (the default) denies the
+    /// call; <see cref="SchematicFailurePolicy.FailOpen"/> lets it through, unreserved in the lease case.
     /// </summary>
     public SchematicFailurePolicy FailurePolicy { get; set; } = SchematicFailurePolicy.FailClosed;
 

@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using SchematicHQ.Community.DependencyInjection;
-using SchematicHQ.Client.RulesEngine;
 
 namespace SchematicHQ.Community.Extensions.AI;
 
@@ -60,33 +59,6 @@ public sealed class SchematicGatingChatClient : DelegatingChatClient
             yield return update;
     }
 
-    private async ValueTask EnsureEntitledAsync(CancellationToken cancellationToken)
-    {
-        var context = await AiFlagContextResolution.ResolveAsync(_httpContextAccessor, _options)
-            ?? throw new SchematicFeatureDeniedException(_flagKey, "no_schematic_context");
-
-        CheckFlagWithEntitlementResponse response;
-        try
-        {
-            response = await _schematic.CheckFlagWithEntitlementAsync(_flagKey, context.Company, context.User, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Schematic entitlement check for flag '{FlagKey}' failed; applying {FailurePolicy}.",
-                _flagKey, _options.FailurePolicy);
-
-            if (_options.FailurePolicy == SchematicFailurePolicy.FailOpen)
-                return;
-
-            throw new SchematicFeatureDeniedException(_flagKey, "entitlement_check_failed", ex);
-        }
-
-        if (!response.Value)
-            throw new SchematicFeatureDeniedException(_flagKey, response.Reason);
-    }
+    private ValueTask<AiGateResult> EnsureEntitledAsync(CancellationToken cancellationToken)
+        => AiEntitlementGate.CheckAsync(_schematic, _flagKey, _options, _httpContextAccessor, _logger, cancellationToken);
 }
