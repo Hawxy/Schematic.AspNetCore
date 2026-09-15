@@ -3,6 +3,8 @@
     <PropertyGroup>
         <Description>Quartz.NET integration for Schematic entitlement management: gate and track scheduled jobs via attributes, and schedule recurring trait reports.</Description>
         <PackageTags>metering;quartz;scheduling</PackageTags>
+        <!-- Quartz 4 ships net10.0 only. -->
+        <TargetFrameworks>net10.0</TargetFrameworks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,7 +16,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Quartz.Extensions.DependencyInjection" />
+      <PackageReference Include="Quartz" />
     </ItemGroup>
 
     <Import Project="../../Package.Build.props" />

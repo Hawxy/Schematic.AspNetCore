@@ -13,19 +13,19 @@ internal sealed class QuartzListenerTests
     [RequireFeature("job-flag")]
     private sealed class GatedJob : IJob
     {
-        public Task Execute(IJobExecutionContext context) => Task.CompletedTask;
+        public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     [TrackFeature("job-event", Quantity = 3)]
     [TrackFeature("job-event-secondary")]
     private sealed class TrackedJob : IJob
     {
-        public Task Execute(IJobExecutionContext context) => Task.CompletedTask;
+        public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     private sealed class PlainJob : IJob
     {
-        public Task Execute(IJobExecutionContext context) => Task.CompletedTask;
+        public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     private static SchematicGateTriggerListener CreateGateListener(

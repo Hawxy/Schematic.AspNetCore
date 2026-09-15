@@ -16,7 +16,7 @@ Packages:
 | `SchematicHQ.Community.DependencyInjection` | Registers the `Schematic` SDK client in DI with `ILoggerFactory` wiring, plus a [FusionCache](https://github.com/ZiggyCreatures/FusionCache)-backed `ICacheProvider`. |
 | `SchematicHQ.Community.AspNetCore` | Feature gating, usage tracking, and identify middleware for ASP.NET Core (net8.0+). |
 | `SchematicHQ.Community.Extensions.AI` | [Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai) middleware: meter chat token usage and gate model calls behind entitlements. |
-| `SchematicHQ.Community.Extensions.Quartz` | [Quartz.NET](https://www.quartz-scheduler.net/) integration: gate and track scheduled jobs, and run trait reports on a cron schedule. |
+| `SchematicHQ.Community.Extensions.Quartz` | [Quartz.NET](https://www.quartz-scheduler.net/) integration (Quartz 4, net10.0+): gate and track scheduled jobs, and run trait reports on a cron schedule. |
 
 ## Quickstart
 
@@ -172,7 +172,7 @@ Implementation note: Metering token counts directly works when a feature's price
 builder.Services.AddSchematicQuartz();                 // options, resolver, listeners
 builder.Services.AddQuartz(q =>
 {
-    q.AddSchematic();                                  // wires the listeners into the scheduler
+    q.AddSchematic();                                  // wires the listeners and trait report schedules into the scheduler
 });
 ```
 
@@ -184,7 +184,7 @@ Decorate job classes:
 public sealed class NightlySyncJob : IJob { ... }
 ```
 
-The company/user identity comes from `schematic.company.*` / `schematic.user.*` entries in the merged job data map, declare them with `.UsingSchematicCompany("id", tenantId)` on the job or trigger builder, or register a custom `ISchematicJobContextResolver`. 
+The company/user identity comes from `schematic.company.*` / `schematic.user.*` entries in the merged job data map, declare them with `.UsingSchematicCompany("id", tenantId)` on the job or trigger builder (or the configurator inside `AddQuartz`), or register a custom `ISchematicJobContextResolver`. 
 
 Check failures follow `AddSchematicQuartz(o => o.FailurePolicy = ...)`, and tracking failures never fail the job. 
 
@@ -212,7 +212,7 @@ public sealed class SeatSource(ITenantDbContextFactory dbFactory) : ISchematicTr
 builder.Services.AddSchematicTraitReport<TenantCatalog, SeatSource>("seats", o => o.Cron = "0 0 3 * * ?");
 ```
 
-The source receives each tenant id and handles tenancy itself, return `null` to skip a tenant. Tenants are processed with bounded parallelism, so you're safe to acquire per-tenant resources inside the call. With `AddSchematicQuartz`, every report that sets a cron runs on that schedule (missed runs fire once on startup; trait upserts are last-write-wins, so re-runs are safe). One failing tenant is logged and retried on the next run without sinking the rest. Reports without a cron — or apps not using Quartz — run on demand via `ISchematicTraitReportRunner.RunReportAsync("seats")`.
+The source receives each tenant id and handles tenancy itself, return `null` to skip a tenant. Tenants are processed with bounded parallelism, so you're safe to acquire per-tenant resources inside the call. With `AddSchematicQuartz` and `q.AddSchematic()`, every report that sets a cron runs on that schedule (missed runs fire once on startup; trait upserts are last-write-wins, so re-runs are safe). One failing tenant is logged and retried on the next run without sinking the rest. Reports without a cron — or apps not using Quartz — run on demand via `ISchematicTraitReportRunner.RunReportAsync("seats")`.
 
 Set `o.ScheduleEnabled = false` to keep a report registered and on-demand runnable without anything firing it on a schedule:
 

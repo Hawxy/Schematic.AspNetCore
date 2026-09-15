@@ -31,9 +31,9 @@ internal sealed class SchematicGateTriggerListener : ITriggerListener
 
     public string Name => "schematic-gate";
 
-    public async Task<bool> VetoJobExecution(ITrigger trigger, IJobExecutionContext context, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> VetoJobExecution(ITrigger trigger, IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var attribute = context.JobDetail.JobType.GetCustomAttribute<RequireFeatureAttribute>(inherit: true);
+        var attribute = context.JobDetail.JobType.Type.GetCustomAttribute<RequireFeatureAttribute>(inherit: true);
         if (attribute is null)
             return false;
 
@@ -74,13 +74,4 @@ internal sealed class SchematicGateTriggerListener : ITriggerListener
             return policy == SchematicFailurePolicy.FailClosed;
         }
     }
-
-    public Task TriggerFired(ITrigger trigger, IJobExecutionContext context, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task TriggerMisfired(ITrigger trigger, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task TriggerComplete(ITrigger trigger, IJobExecutionContext context, SchedulerInstruction triggerInstructionCode, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
 }

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Quartz;
 using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.Extensions.Quartz;
@@ -139,25 +138,52 @@ internal sealed class TraitReportTests
             () => services.AddSchematicTraitReport<ListTenantCatalog, SeatSource>("seats"));
     }
 
+    /// <summary>
+    /// Builds a started, uniquely named in-memory scheduler with the Schematic wiring, so the trait report
+    /// plugin has applied whatever the registrations asked for.
+    /// </summary>
+    private static async Task<(ServiceProvider Provider, IScheduler Scheduler)> StartSchedulerAsync(IServiceCollection services)
+    {
+        services.AddSingleton<ISchematicGateClient>(new Infrastructure.FakeGateClient());
+        services.AddSchematicQuartz();
+        var schedulerName = $"trait-report-tests-{Guid.NewGuid():N}";
+        services.AddQuartz(schedulerName, q => q.AddSchematic());
+
+        var provider = services.BuildServiceProvider();
+        var scheduler = provider.GetRequiredKeyedService<IScheduler>(schedulerName);
+        await scheduler.Start();
+        return (provider, scheduler);
+    }
+
     [Test]
-    public void Reports_with_a_cron_are_scheduled_into_quartz_options()
+    public async Task Reports_with_a_cron_are_scheduled_into_the_scheduler()
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSchematicTraitReport<ListTenantCatalog, SeatSource>("seats", o => o.Cron = "0 0 3 * * ?");
         services.AddSchematicTraitReport<ListTenantCatalog, SeatSource>("manual-only");
-        services.AddSchematicQuartz();
 
-        var quartzOptions = services.BuildServiceProvider().GetRequiredService<IOptions<QuartzOptions>>().Value;
+        var (provider, scheduler) = await StartSchedulerAsync(services);
+        try
+        {
+            var jobKey = new JobKey("trait-report-seats", "schematic");
+            var job = await scheduler.GetJobDetail(jobKey);
+            job.ShouldNotBeNull();
+            job.JobType.Type.ShouldBe(typeof(SchematicTraitReportJob));
+            job.JobDataMap.GetString(SchematicTraitReportJob.ReportNameKey).ShouldBe("seats");
 
-        var job = quartzOptions.JobDetails.ShouldHaveSingleItem();
-        job.Key.ShouldBe(new JobKey("trait-report-seats", "schematic"));
-        job.JobType.ShouldBe(typeof(SchematicTraitReportJob));
-        job.JobDataMap.GetString(SchematicTraitReportJob.ReportNameKey).ShouldBe("seats");
+            var trigger = await scheduler.GetTrigger(new TriggerKey("trait-report-seats", "schematic"));
+            trigger.ShouldNotBeNull();
+            trigger.JobKey.ShouldBe(jobKey);
+            ((ICronTrigger)trigger).CronExpressionString.ShouldBe("0 0 3 * * ?");
 
-        var trigger = quartzOptions.Triggers.ShouldHaveSingleItem();
-        trigger.JobKey.ShouldBe(job.Key);
-        ((ICronTrigger)trigger).CronExpressionString.ShouldBe("0 0 3 * * ?");
+            (await scheduler.Exists(new JobKey("trait-report-manual-only", "schematic"))).ShouldBeFalse();
+        }
+        finally
+        {
+            await scheduler.Shutdown();
+            await provider.DisposeAsync();
+        }
     }
 
     /// <summary>
@@ -165,7 +191,7 @@ internal sealed class TraitReportTests
     /// over every tenant and write to Schematic partway through a suite.
     /// </summary>
     [Test]
-    public void Reports_with_scheduling_disabled_are_registered_but_not_scheduled()
+    public async Task Reports_with_scheduling_disabled_are_registered_but_not_scheduled()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -174,18 +200,22 @@ internal sealed class TraitReportTests
             o.Cron = "0 0 3 * * ?";
             o.ScheduleEnabled = false;
         });
-        services.AddSchematicQuartz();
 
-        var provider = services.BuildServiceProvider();
+        var (provider, scheduler) = await StartSchedulerAsync(services);
+        try
+        {
+            (await scheduler.Exists(new JobKey("trait-report-seats", "schematic"))).ShouldBeFalse();
 
-        var quartzOptions = provider.GetRequiredService<IOptions<QuartzOptions>>().Value;
-        quartzOptions.JobDetails.ShouldBeEmpty();
-        quartzOptions.Triggers.ShouldBeEmpty();
-
-        // Still registered, so it remains runnable on demand.
-        provider.GetServices<SchematicTraitReportRegistration>()
-            .ShouldHaveSingleItem()
-            .Name.ShouldBe("seats");
+            // Still registered, so it remains runnable on demand.
+            provider.GetServices<SchematicTraitReportRegistration>()
+                .ShouldHaveSingleItem()
+                .Name.ShouldBe("seats");
+        }
+        finally
+        {
+            await scheduler.Shutdown();
+            await provider.DisposeAsync();
+        }
     }
 
     [Test]
@@ -222,7 +252,7 @@ internal sealed class TraitReportTests
             .WithIdentity("trait-report-seats", "schematic")
             .UsingJobData(SchematicTraitReportJob.ReportNameKey, "seats")
             .Build();
-        await job.Execute(new Infrastructure.FakeJobExecutionContext(detail, detail.JobDataMap));
+        await job.Execute(new Infrastructure.FakeJobExecutionContext(detail, detail.JobDataMap), CancellationToken.None);
 
         pusher.Pushed.ShouldHaveSingleItem().Keys["id"].ShouldBe("acme");
     }

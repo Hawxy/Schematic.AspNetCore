@@ -12,18 +12,41 @@ public static class SchematicJobDataKeys
     public const string UserPrefix = "schematic.user.";
 }
 
-/// <summary>Shortcuts for declaring the Schematic identity when building jobs and triggers.</summary>
+/// <summary>
+/// Shortcuts for declaring the Schematic identity when building jobs and triggers, on both the standalone
+/// builders and the configurators used inside <c>AddQuartz(q =&gt; q.AddJob(...))</c>.
+/// </summary>
 public static class SchematicJobBuilderExtensions
 {
-    public static JobBuilder UsingSchematicCompany(this JobBuilder builder, string keyName, string value)
+    public static JobBuilder<TJob> UsingSchematicCompany<TJob>(this JobBuilder<TJob> builder, string keyName, string value)
+        where TJob : IJob
         => builder.UsingJobData(SchematicJobDataKeys.CompanyPrefix + keyName, value);
 
-    public static JobBuilder UsingSchematicUser(this JobBuilder builder, string keyName, string value)
+    public static JobBuilder<TJob> UsingSchematicUser<TJob>(this JobBuilder<TJob> builder, string keyName, string value)
+        where TJob : IJob
         => builder.UsingJobData(SchematicJobDataKeys.UserPrefix + keyName, value);
 
-    public static TriggerBuilder UsingSchematicCompany(this TriggerBuilder builder, string keyName, string value)
+    public static TriggerBuilder<TJob> UsingSchematicCompany<TJob>(this TriggerBuilder<TJob> builder, string keyName, string value)
+        where TJob : IJob
         => builder.UsingJobData(SchematicJobDataKeys.CompanyPrefix + keyName, value);
 
-    public static TriggerBuilder UsingSchematicUser(this TriggerBuilder builder, string keyName, string value)
+    public static TriggerBuilder<TJob> UsingSchematicUser<TJob>(this TriggerBuilder<TJob> builder, string keyName, string value)
+        where TJob : IJob
         => builder.UsingJobData(SchematicJobDataKeys.UserPrefix + keyName, value);
+
+    public static IJobConfigurator<TJob> UsingSchematicCompany<TJob>(this IJobConfigurator<TJob> configurator, string keyName, string value)
+        where TJob : IJob
+        => configurator.UsingJobData(SchematicJobDataKeys.CompanyPrefix + keyName, value);
+
+    public static IJobConfigurator<TJob> UsingSchematicUser<TJob>(this IJobConfigurator<TJob> configurator, string keyName, string value)
+        where TJob : IJob
+        => configurator.UsingJobData(SchematicJobDataKeys.UserPrefix + keyName, value);
+
+    public static ITriggerConfigurator<TJob> UsingSchematicCompany<TJob>(this ITriggerConfigurator<TJob> configurator, string keyName, string value)
+        where TJob : IJob
+        => configurator.UsingJobData(SchematicJobDataKeys.CompanyPrefix + keyName, value);
+
+    public static ITriggerConfigurator<TJob> UsingSchematicUser<TJob>(this ITriggerConfigurator<TJob> configurator, string keyName, string value)
+        where TJob : IJob
+        => configurator.UsingJobData(SchematicJobDataKeys.UserPrefix + keyName, value);
 }

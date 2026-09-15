@@ -20,11 +20,11 @@ public sealed class SchematicTraitReportJob : IJob
         _runner = runner;
     }
 
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken)
     {
         var reportName = context.MergedJobDataMap.GetString(ReportNameKey)
             ?? throw new JobExecutionException($"Job data '{ReportNameKey}' is missing.");
 
-        await _runner.RunReportAsync(reportName, context.CancellationToken);
+        await _runner.RunReportAsync(reportName, cancellationToken);
     }
 }

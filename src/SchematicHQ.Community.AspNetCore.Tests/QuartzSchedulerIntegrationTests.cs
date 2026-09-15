@@ -26,10 +26,10 @@ internal sealed class QuartzSchedulerIntegrationTests
         private readonly ExecutionProbe _probe;
         public GatedProbeJob(ExecutionProbe probe) => _probe = probe;
 
-        public Task Execute(IJobExecutionContext context)
+        public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
         {
             _probe.Signal();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -39,10 +39,10 @@ internal sealed class QuartzSchedulerIntegrationTests
         private readonly ExecutionProbe _probe;
         public TrackedProbeJob(ExecutionProbe probe) => _probe = probe;
 
-        public Task Execute(IJobExecutionContext context)
+        public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
         {
             _probe.Signal();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -56,15 +56,12 @@ internal sealed class QuartzSchedulerIntegrationTests
         services.AddSingleton<ISchematicGateClient>(fake);
         services.AddSingleton(probe);
         services.AddSchematicQuartz();
-        services.AddQuartz(q =>
-        {
-            // The scheduler repository is static per process; parallel tests need distinct names.
-            q.SchedulerName = $"schematic-tests-{Guid.NewGuid():N}";
-            q.AddSchematic();
-        });
+        // Parallel tests each get their own named scheduler.
+        var schedulerName = $"schematic-tests-{Guid.NewGuid():N}";
+        services.AddQuartz(schedulerName, q => q.AddSchematic());
 
         var provider = services.BuildServiceProvider();
-        var scheduler = await provider.GetRequiredService<ISchedulerFactory>().GetScheduler();
+        var scheduler = provider.GetRequiredKeyedService<IScheduler>(schedulerName);
         await scheduler.Start();
         return (provider, scheduler, fake, probe);
     }

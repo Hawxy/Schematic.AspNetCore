@@ -1,4 +1,10 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="Package.Build.props" />
+    <File Path="README.md" />
+  </Folder>
   <Project Path="src/SchematicHQ.Community.AspNetCore.TestApp/SchematicHQ.Community.AspNetCore.TestApp.csproj" />
   <Project Path="src/SchematicHQ.Community.AspNetCore.Tests/SchematicHQ.Community.AspNetCore.Tests.csproj" />
   <Project Path="src/SchematicHQ.Community.AspNetCore/SchematicHQ.Community.AspNetCore.csproj" />

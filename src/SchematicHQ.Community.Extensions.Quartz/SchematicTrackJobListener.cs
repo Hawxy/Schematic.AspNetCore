@@ -27,12 +27,12 @@ internal sealed class SchematicTrackJobListener : IJobListener
 
     public string Name => "schematic-track";
 
-    public async Task JobWasExecuted(IJobExecutionContext context, JobExecutionException? jobException, CancellationToken cancellationToken = default)
+    public async ValueTask JobWasExecuted(IJobExecutionContext context, JobExecutionException? jobException, CancellationToken cancellationToken = default)
     {
         if (jobException is not null)
             return;
 
-        var attributes = context.JobDetail.JobType.GetCustomAttributes<TrackFeatureAttribute>(inherit: true).ToArray();
+        var attributes = context.JobDetail.JobType.Type.GetCustomAttributes<TrackFeatureAttribute>(inherit: true).ToArray();
         if (attributes.Length == 0)
             return;
 
@@ -62,10 +62,4 @@ internal sealed class SchematicTrackJobListener : IJobListener
                 context.JobDetail.Key);
         }
     }
-
-    public Task JobToBeExecuted(IJobExecutionContext context, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task JobExecutionVetoed(IJobExecutionContext context, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
 }
