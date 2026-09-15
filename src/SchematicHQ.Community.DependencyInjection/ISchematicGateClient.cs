@@ -40,4 +40,44 @@ public interface ISchematicGateClient
         string? name,
         Dictionary<string, object?>? traits,
         IdentifyOptions? options = null);
+
+    /// <summary>
+    /// Reserves <paramref name="requestedAmount"/> credits of <paramref name="creditTypeId"/> for
+    /// <paramref name="companyId"/> (Schematic's company id, not the company keys). Events sent with
+    /// <see cref="TrackAgainstLeaseAsync"/> settle from the hold; <see cref="ReleaseCreditLeaseAsync"/>
+    /// returns what was not tracked. Custom implementations that do not support leases can leave the
+    /// default, which throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    Task<SchematicCreditLease> AcquireCreditLeaseAsync(
+        string companyId,
+        string creditTypeId,
+        double requestedAmount,
+        DateTime? expiresAt,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
+
+    /// <summary>Adds <paramref name="additionalAmount"/> credits to an open lease.</summary>
+    Task<SchematicCreditLease> ExtendCreditLeaseAsync(
+        string leaseId,
+        double additionalAmount,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
+
+    /// <summary>Closes a lease, returning its untracked remainder to the company's balance.</summary>
+    Task ReleaseCreditLeaseAsync(string leaseId, CancellationToken cancellationToken)
+        => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
+
+    /// <summary>
+    /// Sends a Track event redeemed against a lease. Unlike <see cref="Track"/> this is an immediate API
+    /// call: the SDK's buffered path cannot carry a lease id.
+    /// </summary>
+    Task TrackAgainstLeaseAsync(
+        string leaseId,
+        string eventName,
+        Dictionary<string, string> company,
+        Dictionary<string, string> user,
+        Dictionary<string, object?> traits,
+        long quantity,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
 }

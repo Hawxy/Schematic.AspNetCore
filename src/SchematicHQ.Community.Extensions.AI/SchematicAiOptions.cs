@@ -8,7 +8,7 @@ namespace SchematicHQ.Community.Extensions.AI;
 /// Options for the Schematic chat-client middlewares. Captured per pipeline at
 /// <c>UseSchematicUsageTracking</c>/<c>UseSchematicRequireFeature</c> time.
 /// </summary>
-public sealed class SchematicAiOptions
+public class SchematicAiOptions
 {
     /// <summary>
     /// Maps a response's <see cref="UsageDetails"/> (plus model id) to the Track events to emit.

@@ -164,6 +164,24 @@ Anything the provider reports in `UsageDetails.AdditionalCounts` (such as cache 
 
 Implementation note: Metering token counts directly works when a feature's price is per token. To meter against **credits** instead, set the entitlement's `priceBehavior` to `credit_burndown` and give each event its own `creditConsumptionRate`. Input and output tokens can burn the same credit at different rates, which keeps the price ratio between them in Schematic rather than hard-coded in a custom `MapUsage`.
 
+### Reserving credits with a lease
+
+The gate/track pair is post-paid: the balance is checked before the call and debited after it, so a long generation or several concurrent calls can all pass on the same balance and overspend. For credit-burndown entitlements, `UseSchematicCreditLease` replaces the pair and reserves the estimated credits first:
+
+```csharp
+builder.Services.AddChatClient(sp => /* provider client */)
+    .UseSchematicCreditLease("ai-chat", o =>
+    {
+        o.LeaseDuration = TimeSpan.FromMinutes(5);         // hold expiry if the app dies mid-call
+        // o.EstimateUsage = (messages, options) => ...;     // default: ~4 chars/token in, MaxOutputTokens (or 1024) out
+        // o.CreditCost = (events, entitlement) => ...;      // default: every event's quantity * entitlement.ConsumptionRate
+    });
+```
+
+Per call it checks the flag, sizes a hold from `EstimateUsage` and `CreditCost`, and acquires a lease against the company's credit; the model runs; the actual usage is tracked against the lease (extending it first if the estimate fell short) and the unspent remainder is released. A rejected hold denies the call with reason `insufficient_credits`. If the model call throws, the whole hold is released. When the flag's entitlement is not credit-based the middleware behaves like `UseSchematicRequireFeature` + `UseSchematicUsageTracking`.
+
+Lease-backed events are sent immediately rather than through the SDK's buffered path, which cannot carry a lease id. If that send fails the event falls back to the buffered path, so usage is never lost. `ISchematicGateClient` gained lease members with default implementations that throw `NotSupportedException`, so custom gate clients keep compiling but must implement them to use this middleware.
+
 ## Gating and tracking Quartz jobs
 
 `SchematicHQ.Community.Extensions.Quartz` applies the same gate/track model to scheduled jobs:

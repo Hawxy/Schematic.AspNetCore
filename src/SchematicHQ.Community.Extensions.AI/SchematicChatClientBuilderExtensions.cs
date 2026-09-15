@@ -8,7 +8,7 @@ using SchematicHQ.Community.DependencyInjection;
 namespace SchematicHQ.Community.Extensions.AI;
 
 /// <summary>
-/// Schematic middlewares for the <see cref="ChatClientBuilder"/> pipeline. Both require
+/// Schematic middlewares for the <see cref="ChatClientBuilder"/> pipeline. All require
 /// <c>AddSchematicAspNetCore()</c> (for the Schematic gate client); identity comes from the ambient
 /// HTTP request's flag-context resolver when <c>AddHttpContextAccessor()</c> is registered, else from
 /// <see cref="SchematicAiOptions.FallbackContext"/>.
@@ -52,9 +52,32 @@ public static class SchematicChatClientBuilderExtensions
             sp.GetService<IHttpContextAccessor>()));
     }
 
-    private static SchematicAiOptions BuildOptions(Action<SchematicAiOptions>? configure)
+    /// <summary>
+    /// Gates model calls behind a credit-burndown entitlement and reserves the estimated credits with a
+    /// lease before the model is invoked, then tracks the actual usage against the lease and releases
+    /// the remainder. Replaces the <c>UseSchematicRequireFeature</c> + <c>UseSchematicUsageTracking</c>
+    /// pair for that flag; when the entitlement is not credit-based it behaves like that pair.
+    /// </summary>
+    public static ChatClientBuilder UseSchematicCreditLease(
+        this ChatClientBuilder builder,
+        string flagKey,
+        Action<SchematicCreditLeaseOptions>? configure = null)
     {
-        var options = new SchematicAiOptions();
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(flagKey);
+        return builder.Use((inner, sp) => new SchematicCreditLeaseChatClient(
+            inner,
+            sp.GetRequiredService<ISchematicGateClient>(),
+            flagKey,
+            BuildOptions(configure),
+            CreateLogger<SchematicCreditLeaseChatClient>(sp),
+            sp.GetService<IHttpContextAccessor>()));
+    }
+
+    private static TOptions BuildOptions<TOptions>(Action<TOptions>? configure)
+        where TOptions : SchematicAiOptions, new()
+    {
+        var options = new TOptions();
         configure?.Invoke(options);
         return options;
     }

@@ -24,16 +24,44 @@ internal sealed record CheckCall(
     Dictionary<string, string> Company,
     Dictionary<string, string> User);
 
+internal sealed record LeaseCall(
+    string CompanyId,
+    string CreditTypeId,
+    double RequestedAmount,
+    DateTime? ExpiresAt);
+
+internal sealed record ExtendLeaseCall(string LeaseId, double AdditionalAmount);
+
+internal sealed record LeaseTrackCall(
+    string LeaseId,
+    string EventName,
+    Dictionary<string, string> Company,
+    Dictionary<string, string> User,
+    Dictionary<string, object?> Traits,
+    long Quantity);
+
 internal sealed class FakeGateClient : ISchematicGateClient
 {
     private readonly object _lock = new();
     private Func<string, CheckFlagWithEntitlementResponse>? _checkResponder;
+    private int _leaseCounter;
 
     public List<CheckCall> CheckCalls { get; } = new();
     public List<TrackCall> TrackCalls { get; } = new();
     public List<IdentifyCall> IdentifyCalls { get; } = new();
+    public List<LeaseCall> LeaseCalls { get; } = new();
+    public List<ExtendLeaseCall> ExtendLeaseCalls { get; } = new();
+    public List<string> ReleasedLeases { get; } = new();
+    public List<LeaseTrackCall> LeaseTrackCalls { get; } = new();
     public bool ThrowOnTrack { get; set; }
     public bool ThrowOnIdentify { get; set; }
+    public bool ThrowOnLeaseTrack { get; set; }
+
+    /// <summary>Thrown from <see cref="AcquireCreditLeaseAsync"/> when set.</summary>
+    public Exception? ThrowOnAcquireLease { get; set; }
+
+    /// <summary>Overrides the granted amount; by default a lease grants what was requested.</summary>
+    public double? GrantedAmountOverride { get; set; }
 
     public void Reset()
     {
@@ -42,9 +70,16 @@ internal sealed class FakeGateClient : ISchematicGateClient
             _checkResponder = null;
             ThrowOnTrack = false;
             ThrowOnIdentify = false;
+            ThrowOnLeaseTrack = false;
+            ThrowOnAcquireLease = null;
+            GrantedAmountOverride = null;
             CheckCalls.Clear();
             TrackCalls.Clear();
             IdentifyCalls.Clear();
+            LeaseCalls.Clear();
+            ExtendLeaseCalls.Clear();
+            ReleasedLeases.Clear();
+            LeaseTrackCalls.Clear();
         }
     }
 
@@ -102,5 +137,63 @@ internal sealed class FakeGateClient : ISchematicGateClient
                 throw new InvalidOperationException("FakeGateClient.ThrowOnIdentify is enabled.");
             IdentifyCalls.Add(new IdentifyCall(new(keys), company, name, traits is null ? null : new(traits), options));
         }
+    }
+
+    public Task<SchematicCreditLease> AcquireCreditLeaseAsync(
+        string companyId,
+        string creditTypeId,
+        double requestedAmount,
+        DateTime? expiresAt,
+        CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            LeaseCalls.Add(new LeaseCall(companyId, creditTypeId, requestedAmount, expiresAt));
+            if (ThrowOnAcquireLease is not null)
+                throw ThrowOnAcquireLease;
+
+            var id = $"lease_{++_leaseCounter}";
+            return Task.FromResult(new SchematicCreditLease(
+                id, companyId, creditTypeId, GrantedAmountOverride ?? requestedAmount, 0,
+                expiresAt ?? DateTime.UtcNow.AddMinutes(10)));
+        }
+    }
+
+    public Task<SchematicCreditLease> ExtendCreditLeaseAsync(
+        string leaseId,
+        double additionalAmount,
+        CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            ExtendLeaseCalls.Add(new ExtendLeaseCall(leaseId, additionalAmount));
+            return Task.FromResult(new SchematicCreditLease(
+                leaseId, "company_1", "credit_1", additionalAmount, 0, DateTime.UtcNow.AddMinutes(10)));
+        }
+    }
+
+    public Task ReleaseCreditLeaseAsync(string leaseId, CancellationToken cancellationToken)
+    {
+        lock (_lock) ReleasedLeases.Add(leaseId);
+        return Task.CompletedTask;
+    }
+
+    public Task TrackAgainstLeaseAsync(
+        string leaseId,
+        string eventName,
+        Dictionary<string, string> company,
+        Dictionary<string, string> user,
+        Dictionary<string, object?> traits,
+        long quantity,
+        CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            if (ThrowOnLeaseTrack)
+                throw new InvalidOperationException("FakeGateClient.ThrowOnLeaseTrack is enabled.");
+            LeaseTrackCalls.Add(new LeaseTrackCall(leaseId, eventName, new(company), new(user), new(traits), quantity));
+        }
+
+        return Task.CompletedTask;
     }
 }
