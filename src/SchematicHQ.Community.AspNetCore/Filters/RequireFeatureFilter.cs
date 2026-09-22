@@ -61,22 +61,10 @@ public sealed class RequireFeatureFilter : IEndpointFilter
 
         http.Items[SchematicFilterItemKeys.FlagContext] = flagContext;
 
-        CheckFlagWithEntitlementResponse response;
-        try
+        var outcome = await _client.TryCheckFlagAsync(
+            metadata.FlagKey, flagContext, options.FailurePolicy, _logger, http.RequestAborted);
+        if (outcome.Response is not { } response)
         {
-            response = await _client.CheckFlagWithEntitlementAsync(
-                metadata.FlagKey, flagContext.Company, flagContext.User, http.RequestAborted);
-        }
-        catch (OperationCanceledException) when (http.RequestAborted.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Schematic entitlement check for flag '{FlagKey}' failed; applying {FailurePolicy}.",
-                metadata.FlagKey, options.FailurePolicy);
-
             if (options.FailurePolicy == SchematicFailurePolicy.FailOpen)
                 return await next(context);
 
@@ -92,18 +80,10 @@ public sealed class RequireFeatureFilter : IEndpointFilter
             return await next(context);
         }
 
-        var denial = new SchematicDenialContext(
-            FeatureId: metadata.FlagKey,
-            Reason: response.Reason);
-
-        if (options.OnDenied is { } onDenied)
-        {
-            await onDenied(http, denial);
-        }
-        else
-        {
-            await DefaultDenialResponseWriter.WriteAsync(http, denial);
-        }
+        await SchematicDenialResponse.WriteAsync(
+            http,
+            new SchematicDenialContext(FeatureId: metadata.FlagKey, Reason: response.Reason),
+            options);
 
         return Results.Empty;
     }

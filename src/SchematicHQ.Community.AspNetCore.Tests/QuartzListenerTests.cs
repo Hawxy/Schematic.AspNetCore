@@ -5,6 +5,7 @@ using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.Extensions.Quartz;
 using Shouldly;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -29,14 +30,14 @@ internal sealed class QuartzListenerTests
     }
 
     private static SchematicGateTriggerListener CreateGateListener(
-        FakeGateClient client, SchematicFailurePolicy policy = SchematicFailurePolicy.FailClosed)
+        FakeSchematicGateClient client, SchematicFailurePolicy policy = SchematicFailurePolicy.FailClosed)
         => new(
             client,
             new JobDataMapContextResolver(),
             Microsoft.Extensions.Options.Options.Create(new SchematicQuartzOptions { FailurePolicy = policy }),
             NullLogger<SchematicGateTriggerListener>.Instance);
 
-    private static SchematicTrackJobListener CreateTrackListener(FakeGateClient client)
+    private static SchematicTrackJobListener CreateTrackListener(FakeSchematicGateClient client)
         => new(client, new JobDataMapContextResolver(), NullLogger<SchematicTrackJobListener>.Instance);
 
     private static FakeJobExecutionContext CreateContext<TJob>(string? companyId = "acme") where TJob : IJob
@@ -54,7 +55,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Gate_ignores_jobs_without_the_attribute()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var vetoed = await CreateGateListener(fake).VetoJobExecution(CreateTrigger(), CreateContext<PlainJob>());
 
         vetoed.ShouldBeFalse();
@@ -64,7 +65,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Gate_vetoes_when_no_context_is_resolvable()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var vetoed = await CreateGateListener(fake)
             .VetoJobExecution(CreateTrigger(), CreateContext<GatedJob>(companyId: null));
 
@@ -75,7 +76,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Gate_allows_when_the_flag_check_passes()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Allow(flag));
 
         var vetoed = await CreateGateListener(fake).VetoJobExecution(CreateTrigger(), CreateContext<GatedJob>());
@@ -89,7 +90,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Gate_vetoes_when_the_flag_check_denies()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Deny(flag));
 
         var vetoed = await CreateGateListener(fake).VetoJobExecution(CreateTrigger(), CreateContext<GatedJob>());
@@ -100,7 +101,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Gate_check_failure_vetoes_under_fail_closed()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(_ => throw new InvalidOperationException("backend down"));
 
         var vetoed = await CreateGateListener(fake, SchematicFailurePolicy.FailClosed)
@@ -112,7 +113,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Gate_check_failure_allows_under_fail_open()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(_ => throw new InvalidOperationException("backend down"));
 
         var vetoed = await CreateGateListener(fake, SchematicFailurePolicy.FailOpen)
@@ -124,7 +125,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Track_emits_one_event_per_attribute_on_success()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         await CreateTrackListener(fake).JobWasExecuted(CreateContext<TrackedJob>(), jobException: null);
 
         fake.TrackCalls.Count.ShouldBe(2);
@@ -136,7 +137,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Track_skips_faulted_executions()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         await CreateTrackListener(fake).JobWasExecuted(
             CreateContext<TrackedJob>(), new JobExecutionException("boom"));
 
@@ -146,7 +147,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Track_skips_when_no_context_is_resolvable()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         await CreateTrackListener(fake).JobWasExecuted(CreateContext<TrackedJob>(companyId: null), jobException: null);
 
         fake.TrackCalls.ShouldBeEmpty();
@@ -155,7 +156,7 @@ internal sealed class QuartzListenerTests
     [Test]
     public async Task Track_failure_is_swallowed()
     {
-        var fake = new FakeGateClient { ThrowOnTrack = true };
+        var fake = new FakeSchematicGateClient { ThrowOnTrack = new InvalidOperationException("track failed") };
         await CreateTrackListener(fake).JobWasExecuted(CreateContext<TrackedJob>(), jobException: null);
 
         fake.TrackCalls.ShouldBeEmpty();

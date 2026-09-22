@@ -9,6 +9,7 @@ using SchematicHQ.Community.AspNetCore.TestApp;
 using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using Shouldly;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -38,7 +39,7 @@ internal sealed class FailurePolicyTests : AlbaTestBase
     [Test]
     public async Task Check_failure_with_fail_open_continues_pipeline_without_auto_track()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(_ => throw new HttpRequestException("schematic unreachable"));
 
         await using var host = await AlbaHost.For<Program>(webHost =>
@@ -64,7 +65,7 @@ internal sealed class FailurePolicyTests : AlbaTestBase
     [Test]
     public async Task Track_failure_does_not_affect_successful_response()
     {
-        FakeClient.ThrowOnTrack = true;
+        FakeClient.ThrowOnTrack = new InvalidOperationException("track failed");
 
         await Host.Scenario(_ =>
         {

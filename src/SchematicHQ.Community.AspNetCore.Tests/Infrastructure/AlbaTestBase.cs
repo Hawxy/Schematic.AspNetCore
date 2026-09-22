@@ -1,4 +1,5 @@
 using Alba;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 
@@ -12,7 +13,7 @@ internal abstract class AlbaTestBase
     }
 
     protected IAlbaHost Host => _bootstrap.Host;
-    protected FakeGateClient FakeClient => _bootstrap.FakeClient;
+    protected FakeSchematicGateClient FakeClient => _bootstrap.FakeClient;
     protected StubFlagContextResolver Resolver => _bootstrap.Resolver;
 
     [Before(Test)]

@@ -34,4 +34,13 @@ internal static class CheckResponses
                 CreditRemaining = creditRemaining,
             },
         };
+
+    /// <summary>The denial the rules engine issues when a credit-backed entitlement has nothing left.</summary>
+    public static CheckFlagWithEntitlementResponse DenyForSpentCredits(string flag)
+    {
+        var response = AllowWithCredits(flag, consumptionRate: 1, creditRemaining: 0);
+        response.Value = false;
+        response.Reason = "credit_balance_exhausted";
+        return response;
+    }
 }

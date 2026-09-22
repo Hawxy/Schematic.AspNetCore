@@ -5,13 +5,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SchematicHQ.Community.AspNetCore.Resolvers;
 using SchematicHQ.Community.DependencyInjection;
 using TUnit.Core.Interfaces;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 
 internal sealed class AlbaBootstrap : IAsyncInitializer, IAsyncDisposable
 {
     public IAlbaHost Host { get; private set; } = null!;
-    public FakeGateClient FakeClient { get; } = new();
+    public FakeSchematicGateClient FakeClient { get; } = new();
     public StubFlagContextResolver Resolver { get; } = new();
 
     public async Task InitializeAsync()

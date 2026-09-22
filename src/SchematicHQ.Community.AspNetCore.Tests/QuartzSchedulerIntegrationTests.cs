@@ -4,6 +4,7 @@ using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.Extensions.Quartz;
 using Shouldly;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -46,9 +47,9 @@ internal sealed class QuartzSchedulerIntegrationTests
         }
     }
 
-    private static async Task<(ServiceProvider Provider, IScheduler Scheduler, FakeGateClient Fake, ExecutionProbe Probe)> StartSchedulerAsync()
+    private static async Task<(ServiceProvider Provider, IScheduler Scheduler, FakeSchematicGateClient Fake, ExecutionProbe Probe)> StartSchedulerAsync()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var probe = new ExecutionProbe();
 
         var services = new ServiceCollection();

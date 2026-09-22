@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using SchematicHQ.Community.DependencyInjection;
 using Shouldly;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -68,7 +69,7 @@ internal sealed class NoOpGateClientTests
     [Test]
     public async Task Leaves_an_already_registered_client_in_place()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
 
         var client = Resolve(s =>
         {

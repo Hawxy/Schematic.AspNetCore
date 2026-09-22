@@ -4,34 +4,18 @@ using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.Extensions.AI;
 using Shouldly;
 using static SchematicHQ.Community.AspNetCore.Tests.Infrastructure.AiTestPipeline;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
 internal sealed class AiCreditLeaseTests
 {
-    private const string Flag = "ai-chat";
-
-    /// <summary>Deterministic hold: 100 input + 200 output tokens.</summary>
-    private static UsageDetails FixedEstimate(IEnumerable<ChatMessage> messages, ChatOptions? options)
-        => new() { InputTokenCount = 100, OutputTokenCount = 200 };
-
-    private static IChatClient BuildLeasePipeline(
-        IChatClient inner,
-        FakeGateClient fake,
-        Action<SchematicCreditLeaseOptions>? configure = null,
-        Func<IEnumerable<ChatMessage>, ChatOptions?, UsageDetails>? estimate = null)
-        => BuildPipeline(inner, fake, b => b.UseSchematicCreditLease(Flag, o =>
-        {
-            o.FallbackContext = Identity;
-            o.EstimateUsage = estimate ?? FixedEstimate;
-            configure?.Invoke(o);
-        }));
 
     [Test]
     public async Task Lease_covers_the_estimated_credits_and_usage_is_tracked_against_it()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 120, output: 45) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 2));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -61,9 +45,9 @@ internal sealed class AiCreditLeaseTests
     public async Task Default_estimate_uses_message_length_and_max_output_tokens()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(1, 1) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
-        var client = BuildLeasePipeline(inner, fake, estimate: SchematicCreditLeaseOptions.DefaultUsageEstimate);
+        var client = BuildLeasePipeline(inner, fake, o => o.EstimateUsage = SchematicCreditLeaseOptions.DefaultUsageEstimate);
 
         // "hello world" is 11 characters => 3 input tokens; 50 output tokens from the options.
         await client.GetResponseAsync("hello world", new ChatOptions { MaxOutputTokens = 50 });
@@ -75,7 +59,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Usage_beyond_the_hold_extends_the_lease_before_tracking()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 1_000, output: 500) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -93,7 +77,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Custom_credit_cost_can_price_events_differently()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 100, output: 10) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake, o => o.CreditCost = (events, _) =>
             events.Sum(e => e.EventName == "ai.output-tokens" ? e.Quantity * 5.0 : e.Quantity));
@@ -119,7 +103,7 @@ internal sealed class AiCreditLeaseTests
                 },
             ],
         };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -143,7 +127,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Model_failure_releases_the_lease_without_tracking()
     {
         var inner = new StubChatClient { Throws = new InvalidOperationException("model down") };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -160,7 +144,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Denied_check_throws_before_any_lease_or_model_call()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Deny(flag, "no_credits"));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -176,7 +160,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Non_credit_entitlement_gates_and_tracks_without_a_lease()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 20) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Allow(flag));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -193,7 +177,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Rejected_lease_denies_the_call()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient { RejectLease = true };
+        var fake = new FakeSchematicGateClient { RejectLease = true };
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -209,7 +193,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Lease_failure_under_fail_closed_denies_the_call()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient { ThrowOnAcquireLease = new HttpRequestException("backend down") };
+        var fake = new FakeSchematicGateClient { ThrowOnAcquireLease = new HttpRequestException("backend down") };
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -224,7 +208,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Lease_failure_under_fail_open_falls_back_to_buffered_tracking()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 20) };
-        var fake = new FakeGateClient { ThrowOnAcquireLease = new HttpRequestException("backend down") };
+        var fake = new FakeSchematicGateClient { ThrowOnAcquireLease = new HttpRequestException("backend down") };
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake, o => o.FailurePolicy = SchematicFailurePolicy.FailOpen);
 
@@ -239,7 +223,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Lease_track_failure_falls_back_to_buffered_tracking_and_still_releases()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 20) };
-        var fake = new FakeGateClient { ThrowOnLeaseTrack = true };
+        var fake = new FakeSchematicGateClient { ThrowOnLeaseTrack = new InvalidOperationException("lease track failed") };
         fake.RespondToCheck(flag => CheckResponses.AllowWithCredits(flag, consumptionRate: 1));
         var client = BuildLeasePipeline(inner, fake);
 
@@ -254,7 +238,7 @@ internal sealed class AiCreditLeaseTests
     public async Task Missing_identity_denies_the_call()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildLeasePipeline(inner, fake, o => o.FallbackContext = null);
 
         var ex = await Should.ThrowAsync<SchematicFeatureDeniedException>(() => client.GetResponseAsync("hi"));

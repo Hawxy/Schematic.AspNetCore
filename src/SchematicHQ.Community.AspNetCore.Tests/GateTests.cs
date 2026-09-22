@@ -4,6 +4,7 @@ using Alba;
 using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using SchematicHQ.Community.AspNetCore.TestApp;
 using Shouldly;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -106,7 +107,7 @@ internal sealed class GateTests : AlbaTestBase
     [Test]
     public async Task OPTIONS_preflight_bypasses_gate_and_track_filters()
     {
-        // if the gate filter ran, the FakeGateClient would throw.
+        // if the gate filter ran, the FakeSchematicGateClient would throw.
         using var client = Host.Server.CreateClient();
         var request = new HttpRequestMessage(HttpMethod.Options, "/min/cors-preflight");
         var response = await client.SendAsync(request);

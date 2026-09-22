@@ -17,6 +17,7 @@
       <ProjectReference Include="..\SchematicHQ.Community.AspNetCore\SchematicHQ.Community.AspNetCore.csproj" />
       <ProjectReference Include="..\SchematicHQ.Community.Extensions.AI\SchematicHQ.Community.Extensions.AI.csproj" />
       <ProjectReference Include="..\SchematicHQ.Community.Extensions.Quartz\SchematicHQ.Community.Extensions.Quartz.csproj" />
+      <ProjectReference Include="..\SchematicHQ.Community.Testing\SchematicHQ.Community.Testing.csproj" />
     </ItemGroup>
 
 </Project>

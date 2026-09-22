@@ -33,6 +33,16 @@ public sealed class SchematicCreditLeaseOptions : SchematicAiOptions
     /// </summary>
     public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// Lets a call proceed when the credit balance cannot fund it: a check denied because the balance is spent,
+    /// or a hold Schematic refuses. The model runs without a hold and its usage is tracked through the buffered
+    /// path, which debits the grant past zero — the overage the customer is then billed or topped up for. A
+    /// denial that is not about credit (no entitlement at all, a rule that excludes the company) still denies.
+    /// <c>false</c> (the default) denies with reason <c>insufficient_credits</c>. <see cref="SchematicAiOptions.DenialBehavior"/>
+    /// set to <see cref="SchematicDenialBehavior.Allow"/> subsumes this.
+    /// </summary>
+    public bool AllowOverdraft { get; set; }
+
     public static UsageDetails DefaultUsageEstimate(IEnumerable<ChatMessage> messages, ChatOptions? options)
     {
         long characters = 0;

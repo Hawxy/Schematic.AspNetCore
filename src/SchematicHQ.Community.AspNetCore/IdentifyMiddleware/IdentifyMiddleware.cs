@@ -91,10 +91,7 @@ public class IdentifyMiddleware
 
     private static void AppendKeys(StringBuilder sb, Dictionary<string, string>? keys)
     {
-        if (keys is null)
-            return;
-
-        foreach (var (key, value) in keys.OrderBy(p => p.Key, StringComparer.Ordinal))
-            sb.Append(key).Append('=').Append(value).Append(';');
+        if (keys is not null)
+            SchematicKeyString.Append(sb, keys);
     }
 }

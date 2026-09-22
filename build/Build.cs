@@ -68,6 +68,7 @@ class Build : NukeBuild
         "SchematicHQ.Community.AspNetCore",
         "SchematicHQ.Community.Extensions.AI",
         "SchematicHQ.Community.Extensions.Quartz",
+        "SchematicHQ.Community.Testing",
     ];
 
     Target NugetPack => _ => _

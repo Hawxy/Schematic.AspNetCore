@@ -11,4 +11,5 @@
   <Project Path="src/SchematicHQ.Community.Extensions.AI/SchematicHQ.Community.Extensions.AI.csproj" />
   <Project Path="src/SchematicHQ.Community.Extensions.Quartz/SchematicHQ.Community.Extensions.Quartz.csproj" />
   <Project Path="src/SchematicHQ.Community.DependencyInjection/SchematicHQ.Community.DependencyInjection.csproj" />
+  <Project Path="src/SchematicHQ.Community.Testing/SchematicHQ.Community.Testing.csproj" />
 </Solution>

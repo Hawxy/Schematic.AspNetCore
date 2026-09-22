@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Description>Test double for the Schematic gate client used by the SchematicHQ.Community packages: canned entitlement answers per flag and per user, recorded checks, tracks, identifies and credit leases, and a one-line swap into the service collection.</Description>
+        <PackageTags>testing;fakes</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SchematicHQ.Community.DependencyInjection\SchematicHQ.Community.DependencyInjection.csproj" />
+    </ItemGroup>
+
+    <Import Project="../../Package.Build.props" />
+
+</Project>

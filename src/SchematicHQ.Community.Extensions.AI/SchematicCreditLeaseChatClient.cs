@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using SchematicHQ.Client;
+using SchematicHQ.Client.RulesEngine;
 using SchematicHQ.Community.DependencyInjection;
 
 namespace SchematicHQ.Community.Extensions.AI;
@@ -21,6 +22,7 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
     private readonly SchematicCreditLeaseOptions _options;
     private readonly ILogger<SchematicCreditLeaseChatClient> _logger;
     private readonly IHttpContextAccessor? _httpContextAccessor;
+    private readonly Func<CheckFlagWithEntitlementResponse, bool> _canOverdraw;
 
     public SchematicCreditLeaseChatClient(
         IChatClient innerClient,
@@ -40,6 +42,8 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         _options = options;
         _logger = logger;
         _httpContextAccessor = httpContextAccessor;
+        // Overdraft only excuses a denial about credit: a company with no entitlement at all is still denied.
+        _canOverdraw = response => _options.AllowOverdraft && response.Entitlement?.CreditId is not null;
     }
 
     public override async Task<ChatResponse> GetResponseAsync(
@@ -90,12 +94,22 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
     }
 
     /// <summary>Gates the call and, for a credit-backed entitlement, takes the hold.</summary>
-    private async ValueTask<CallState> BeginAsync(
+    private async ValueTask<CallState?> BeginAsync(
         IReadOnlyList<ChatMessage> messages,
         ChatOptions? options,
         CancellationToken cancellationToken)
     {
-        var gate = await AiEntitlementGate.CheckAsync(_schematic, _flagKey, _options, _httpContextAccessor, _logger, cancellationToken);
+        var gate = await AiEntitlementGate.CheckAsync(
+            _schematic, _flagKey, _options, _httpContextAccessor, _logger, cancellationToken, tolerateDenial: _canOverdraw);
+
+        // No identity: nothing to reserve against or attribute usage to.
+        if (gate.Context is null)
+            return null;
+
+        // The check said no and the call was allowed anyway. The balance cannot fund a hold, so the model runs
+        // without one and its usage debits the grant directly through the buffered path.
+        if (gate.Denied)
+            return new CallState(gate.Context, null);
 
         var entitlement = gate.Response?.Entitlement;
         var companyId = gate.Response?.CompanyId;
@@ -144,9 +158,10 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
 
         if (lease is null)
         {
-            _logger.LogInformation(
-                "Schematic refused a {Hold} credit hold for flag '{FlagKey}'; call denied.", hold, _flagKey);
-            throw new SchematicFeatureDeniedException(_flagKey, "insufficient_credits");
+            _logger.LogInformation("Schematic refused a {Hold} credit hold for flag '{FlagKey}'.", hold, _flagKey);
+            await AiEntitlementGate.DenyAsync(
+                _options, _logger, _flagKey, "insufficient_credits", gate.Context, gate.Response, tolerated: _canOverdraw(gate.Response!));
+            return new CallState(gate.Context, null);
         }
 
         return new CallState(gate.Context, new Hold(lease, entitlement));
@@ -156,8 +171,11 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
     /// Tracks the actual usage (against the lease when one was taken, extending it first if the estimate
     /// fell short) and releases the hold. Never throws: the response has already been produced.
     /// </summary>
-    private async ValueTask SettleAsync(CallState call, UsageDetails? usage, string? modelId)
+    private async ValueTask SettleAsync(CallState? call, UsageDetails? usage, string? modelId)
     {
+        if (call is null)
+            return;
+
         try
         {
             IReadOnlyList<SchematicAiUsageEvent> events = usage is null ? [] : AiUsageTracking.MapEvents(_options, usage, modelId);

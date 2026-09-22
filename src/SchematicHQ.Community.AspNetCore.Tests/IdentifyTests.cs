@@ -11,6 +11,7 @@ using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.AspNetCore.Tests.Infrastructure;
 using SchematicHQ.Client;
 using Shouldly;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -23,7 +24,7 @@ internal sealed class IdentifyTests
         Traits: new() { ["plan"] = "pro" });
 
     private static Task<IAlbaHost> CreateHost(
-        FakeGateClient fake,
+        FakeSchematicGateClient fake,
         StubIdentifyContextResolver resolver,
         Action<SchematicAspNetCoreOptions>? configure = null)
         => AlbaHost.For<Program>(webHost =>
@@ -53,7 +54,7 @@ internal sealed class IdentifyTests
     [Test]
     public async Task Identify_fires_with_resolved_context()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         await using var host = await CreateHost(fake, new StubIdentifyContextResolver(DefaultIdentity()));
 
         await host.Scenario(_ =>
@@ -74,7 +75,7 @@ internal sealed class IdentifyTests
     [Test]
     public async Task No_identify_when_resolver_returns_null()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         await using var host = await CreateHost(fake, new StubIdentifyContextResolver(context: null));
 
         await host.Scenario(_ =>
@@ -89,7 +90,7 @@ internal sealed class IdentifyTests
     [Test]
     public async Task OPTIONS_preflight_skips_identify()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         await using var host = await CreateHost(fake, new StubIdentifyContextResolver(DefaultIdentity()));
 
         using var client = host.Server.CreateClient();
@@ -102,7 +103,7 @@ internal sealed class IdentifyTests
     [Test]
     public async Task Dedup_window_sends_one_identify_per_identity()
     {
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var resolver = new StubIdentifyContextResolver(DefaultIdentity());
         await using var host = await CreateHost(fake, resolver,
             o => o.IdentifyDeduplicationWindow = TimeSpan.FromMinutes(5));
@@ -132,7 +133,7 @@ internal sealed class IdentifyTests
     [Test]
     public async Task Identify_failure_does_not_fail_request()
     {
-        var fake = new FakeGateClient { ThrowOnIdentify = true };
+        var fake = new FakeSchematicGateClient { ThrowOnIdentify = new InvalidOperationException("identify failed") };
         await using var host = await CreateHost(fake, new StubIdentifyContextResolver(DefaultIdentity()));
 
         await host.Scenario(_ =>

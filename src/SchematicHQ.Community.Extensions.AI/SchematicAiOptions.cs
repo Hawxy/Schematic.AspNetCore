@@ -32,6 +32,23 @@ public class SchematicAiOptions
     public SchematicFailurePolicy FailurePolicy { get; set; } = SchematicFailurePolicy.FailClosed;
 
     /// <summary>
+    /// What a gating middleware does when the check denies the call. <see cref="SchematicDenialBehavior.Deny"/>
+    /// (the default) throws <see cref="SchematicFeatureDeniedException"/>; <see cref="SchematicDenialBehavior.Allow"/>
+    /// invokes the model anyway and still reports the denial to <see cref="OnDenied"/> and the log, so gating
+    /// can be observed before it is enforced, or an exhausted balance billed as overage instead of refused.
+    /// Does not apply to a check that <em>fails</em>: that is <see cref="FailurePolicy"/>.
+    /// </summary>
+    public SchematicDenialBehavior DenialBehavior { get; set; } = SchematicDenialBehavior.Deny;
+
+    /// <summary>
+    /// Invoked for every call the check would deny, before the middleware throws or lets it through
+    /// (<see cref="SchematicAiDenial.Allowed"/> says which). Use it to surface the denial to the caller, record a
+    /// metric, or read the credit balance off <see cref="SchematicAiDenial.Response"/>. An exception thrown here
+    /// is logged and does not change the outcome.
+    /// </summary>
+    public Func<SchematicAiDenial, ValueTask>? OnDenied { get; set; }
+
+    /// <summary>
     /// Emits <c>ai.input-tokens</c> and <c>ai.output-tokens</c>, plus one event per entry in
     /// <see cref="UsageDetails.AdditionalCounts"/> named <c>ai.{key}</c> with the key normalised to
     /// kebab-case — so a Bedrock response reporting <c>cache_read_input_tokens</c> also emits

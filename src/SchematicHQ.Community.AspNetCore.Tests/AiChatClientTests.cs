@@ -8,6 +8,7 @@ using SchematicHQ.Community.DependencyInjection;
 using SchematicHQ.Community.Extensions.AI;
 using Shouldly;
 using static SchematicHQ.Community.AspNetCore.Tests.Infrastructure.AiTestPipeline;
+using SchematicHQ.Community.Testing;
 
 namespace SchematicHQ.Community.AspNetCore.Tests;
 
@@ -17,7 +18,7 @@ internal sealed class AiChatClientTests
     public async Task Tracking_emits_default_input_and_output_events_with_model_trait()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 120, output: 45) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicUsageTracking(o => o.FallbackContext = Identity));
 
@@ -36,7 +37,7 @@ internal sealed class AiChatClientTests
     public async Task Tracking_honors_a_custom_usage_mapping()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 20) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake, b => b.UseSchematicUsageTracking(o =>
         {
             o.FallbackContext = Identity;
@@ -54,7 +55,7 @@ internal sealed class AiChatClientTests
     public async Task Tracking_clamps_quantities_above_int_max()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: (long)int.MaxValue + 500, output: 0) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicUsageTracking(o => o.FallbackContext = Identity));
 
@@ -83,7 +84,7 @@ internal sealed class AiChatClientTests
                 },
             ],
         };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicUsageTracking(o => o.FallbackContext = Identity));
 
@@ -114,7 +115,7 @@ internal sealed class AiChatClientTests
                 new ChatResponseUpdate(ChatRole.Assistant, "never consumed"),
             ],
         };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicUsageTracking(o => o.FallbackContext = Identity));
 
@@ -131,7 +132,7 @@ internal sealed class AiChatClientTests
     public async Task Tracking_skips_when_no_identity_resolves()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 10) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake, b => b.UseSchematicUsageTracking());
 
         var response = await client.GetResponseAsync("hi");
@@ -144,7 +145,7 @@ internal sealed class AiChatClientTests
     public async Task Tracking_failure_does_not_fail_the_ai_call()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 10) };
-        var fake = new FakeGateClient { ThrowOnTrack = true };
+        var fake = new FakeSchematicGateClient { ThrowOnTrack = new InvalidOperationException("track failed") };
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicUsageTracking(o => o.FallbackContext = Identity));
 
@@ -167,7 +168,7 @@ internal sealed class AiChatClientTests
         };
 
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 10, output: 5) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicUsageTracking(),
             services => services.AddSingleton<IHttpContextAccessor>(accessor));
@@ -183,7 +184,7 @@ internal sealed class AiChatClientTests
     public async Task Gating_allows_entitled_calls_through()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 1, output: 1) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Allow(flag));
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicRequireFeature("ai-chat", o => o.FallbackContext = Identity));
@@ -200,7 +201,7 @@ internal sealed class AiChatClientTests
     public async Task Gating_denies_before_invoking_the_model()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Deny(flag, reason: "no_ai_entitlement"));
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicRequireFeature("ai-chat", o => o.FallbackContext = Identity));
@@ -216,7 +217,7 @@ internal sealed class AiChatClientTests
     public async Task Gating_denies_streaming_on_first_move_next()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(flag => CheckResponses.Deny(flag));
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicRequireFeature("ai-chat", o => o.FallbackContext = Identity));
@@ -231,7 +232,7 @@ internal sealed class AiChatClientTests
     public async Task Gating_denies_when_no_identity_resolves()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         var client = BuildPipeline(inner, fake, b => b.UseSchematicRequireFeature("ai-chat"));
 
         var ex = await Should.ThrowAsync<SchematicFeatureDeniedException>(() => client.GetResponseAsync("hi"));
@@ -245,7 +246,7 @@ internal sealed class AiChatClientTests
     public async Task Gating_check_failure_fails_closed_by_default()
     {
         var inner = new StubChatClient();
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(_ => throw new HttpRequestException("schematic unreachable"));
         var client = BuildPipeline(inner, fake,
             b => b.UseSchematicRequireFeature("ai-chat", o => o.FallbackContext = Identity));
@@ -261,7 +262,7 @@ internal sealed class AiChatClientTests
     public async Task Gating_check_failure_with_fail_open_invokes_the_model()
     {
         var inner = new StubChatClient { Response = ResponseWithUsage(input: 1, output: 1) };
-        var fake = new FakeGateClient();
+        var fake = new FakeSchematicGateClient();
         fake.RespondToCheck(_ => throw new HttpRequestException("schematic unreachable"));
         var client = BuildPipeline(inner, fake, b => b.UseSchematicRequireFeature("ai-chat", o =>
         {

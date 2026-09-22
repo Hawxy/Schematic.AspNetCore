@@ -144,7 +144,7 @@ internal sealed class TraitReportTests
     /// </summary>
     private static async Task<(ServiceProvider Provider, IScheduler Scheduler)> StartSchedulerAsync(IServiceCollection services)
     {
-        services.AddSingleton<ISchematicGateClient>(new Infrastructure.FakeGateClient());
+        services.AddSingleton<ISchematicGateClient>(new Testing.FakeSchematicGateClient());
         services.AddSchematicQuartz();
         var schedulerName = $"trait-report-tests-{Guid.NewGuid():N}";
         services.AddQuartz(schedulerName, q => q.AddSchematic());

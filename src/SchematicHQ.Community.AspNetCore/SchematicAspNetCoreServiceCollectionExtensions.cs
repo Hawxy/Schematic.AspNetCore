@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SchematicHQ.Community.AspNetCore.Filters;
 using SchematicHQ.Community.AspNetCore.Options;
 using SchematicHQ.Community.AspNetCore.Resolvers;
+using SchematicHQ.Community.AspNetCore.Snapshots;
 
 namespace SchematicHQ.Community.AspNetCore;
 
@@ -27,6 +28,28 @@ public static class SchematicAspNetCoreServiceCollectionExtensions
         services.TryAddSingleton<TrackFeatureFilter>();
         services.TryAddSingleton<SchematicWebhookSignatureFilter>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ISchematicEntitlementSnapshotProvider"/>, which evaluates a set of flags for one
+    /// identity in one call, for code that needs several answers at once rather than one gate per request.
+    /// Identity resolution and the gate client are shared with the filters, so the snapshot agrees with the gates,
+    /// and each check is served from the SDK flag cache when one is configured. Failed checks follow
+    /// <see cref="SchematicEntitlementSnapshotOptions.FailurePolicy"/>.
+    /// </summary>
+    public static IServiceCollection AddSchematicEntitlementSnapshots(
+        this IServiceCollection services,
+        Action<SchematicEntitlementSnapshotOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddSchematicAspNetCore();
+        var optionsBuilder = services.AddOptions<SchematicEntitlementSnapshotOptions>();
+        if (configure is not null)
+            optionsBuilder.Configure(configure);
+
+        services.TryAddSingleton<ISchematicEntitlementSnapshotProvider, SchematicEntitlementSnapshotProvider>();
         return services;
     }
 
