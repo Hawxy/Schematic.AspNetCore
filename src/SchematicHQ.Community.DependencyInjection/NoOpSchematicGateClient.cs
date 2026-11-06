@@ -4,7 +4,7 @@ using SchematicHQ.Client.RulesEngine;
 namespace SchematicHQ.Community.DependencyInjection;
 
 /// <summary>
-/// <see cref="ISchematicGateClient"/> that talks to nothing: Track and Identify are discarded, credit
+/// <see cref="ISchematicGateClient"/> that talks to nothing: Track, inference and Identify events are discarded, credit
 /// leases are granted in full without being recorded, and entitlement checks answer from
 /// <see cref="_allowAll"/> without a network call. Registered by <c>AddSchematicNoOp</c> for
 /// environments that have no API key.
@@ -70,6 +70,17 @@ internal sealed class NoOpSchematicGateClient : ISchematicGateClient
         Dictionary<string, string> user,
         Dictionary<string, object?> traits,
         long quantity,
+        CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
+    public void TrackInference(EventBodyInference body, TrackOptions? options = null)
+    {
+    }
+
+    public Task TrackInferenceAgainstLeaseAsync(
+        string leaseId,
+        EventBodyInference body,
+        string? idempotencyKey,
         CancellationToken cancellationToken)
         => Task.CompletedTask;
 }

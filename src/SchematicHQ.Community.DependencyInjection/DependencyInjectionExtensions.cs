@@ -26,6 +26,17 @@ public static class DependencyInjectionExtensions
         // Flushes buffered Track/Identify events via Schematic.Shutdown() when the provider is disposed.
         services.TryAddSingleton<SchematicClientLifetime>();
 
+        // Batches inference events, which the SDK does not buffer; flushed when the provider is disposed.
+        services.TryAddSingleton(sp =>
+        {
+            var client = sp.GetRequiredService<SchematicHQ.Client.Schematic>();
+            return new SchematicInferenceEventBuffer(
+                async (batch, ct) => await client.Events.CreateEventBatchAsync(
+                    new CreateEventBatchRequestBody { Events = batch },
+                    cancellationToken: ct),
+                sp.GetRequiredService<ILogger<SchematicInferenceEventBuffer>>());
+        });
+
         // Testability seam used by the integration packages (AspNetCore filters, AI middleware, Quartz
         // listeners); TryAdd so tests or advanced callers can register their own implementation first.
         services.TryAddSingleton<ISchematicGateClient, SchematicGateClient>();

@@ -23,6 +23,7 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
     private readonly ILogger<SchematicCreditLeaseChatClient> _logger;
     private readonly IHttpContextAccessor? _httpContextAccessor;
     private readonly Func<CheckFlagWithEntitlementResponse, bool> _canOverdraw;
+    private readonly AiInferenceModels? _models;
 
     public SchematicCreditLeaseChatClient(
         IChatClient innerClient,
@@ -42,6 +43,8 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         _options = options;
         _logger = logger;
         _httpContextAccessor = httpContextAccessor;
+        if (options.Inference is { } inference)
+            _models = new AiInferenceModels(inference, innerClient.GetService<ChatClientMetadata>(), logger);
         // Overdraft only excuses a denial about credit: a company with no entitlement at all is still denied.
         _canOverdraw = response => _options.AllowOverdraft && response.Entitlement?.CreditId is not null;
     }
@@ -106,14 +109,22 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         if (gate.Context is null)
             return null;
 
+        var entitlement = gate.Response?.Entitlement;
+        var unheld = _options.Inference is { } inference
+            ? new CallState(
+                gate.Context,
+                null,
+                _models!.RequestModel(options),
+                inference.EventName ?? entitlement?.EventSubtype)
+            : new CallState(gate.Context, null);
+
         // The check said no and the call was allowed anyway. The balance cannot fund a hold, so the model runs
         // without one and its usage debits the grant directly through the buffered path.
         if (gate.Denied)
-            return new CallState(gate.Context, null);
+            return unheld;
 
-        var entitlement = gate.Response?.Entitlement;
         var companyId = gate.Response?.CompanyId;
-        if (entitlement?.CreditId is null || entitlement.ConsumptionRate is null || companyId is null)
+        if (entitlement?.CreditId is null || !HasCreditRate(entitlement) || companyId is null)
         {
             if (gate.Response is not null)
             {
@@ -122,13 +133,12 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
                     _flagKey);
             }
 
-            return new CallState(gate.Context, null);
+            return unheld;
         }
 
-        var estimate = AiUsageTracking.MapEvents(_options, _options.EstimateUsage(messages, options), options?.ModelId);
-        var hold = _options.CreditCost(estimate, entitlement);
+        var hold = EstimateCredits(messages, options, entitlement);
         if (hold <= 0)
-            return new CallState(gate.Context, null);
+            return unheld;
 
         SchematicCreditLease? lease;
         try
@@ -151,7 +161,7 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
                 _flagKey, _options.FailurePolicy);
 
             if (_options.FailurePolicy == SchematicFailurePolicy.FailOpen)
-                return new CallState(gate.Context, null);
+                return unheld;
 
             throw new SchematicFeatureDeniedException(_flagKey, "credit_lease_failed", ex);
         }
@@ -161,10 +171,27 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
             _logger.LogInformation("Schematic refused a {Hold} credit hold for flag '{FlagKey}'.", hold, _flagKey);
             await AiEntitlementGate.DenyAsync(
                 _options, _logger, _flagKey, "insufficient_credits", gate.Context, gate.Response, tolerated: _canOverdraw(gate.Response!));
-            return new CallState(gate.Context, null);
+            return unheld;
         }
 
-        return new CallState(gate.Context, new Hold(lease, entitlement));
+        return unheld with { Hold = new Hold(lease, entitlement) };
+    }
+
+    /// <summary>
+    /// Track events burn at the per-unit consumption rate; inference events also burn at per-token rates.
+    /// </summary>
+    private bool HasCreditRate(RulesengineFeatureEntitlement entitlement)
+        => entitlement.ConsumptionRate is not null
+            || (_options.Inference is not null && entitlement.QuantityRates is { Count: > 0 });
+
+    private double EstimateCredits(IReadOnlyList<ChatMessage> messages, ChatOptions? options, RulesengineFeatureEntitlement entitlement)
+    {
+        var estimate = _options.EstimateUsage(messages, options);
+
+        if (_options.Inference is { } inference)
+            return inference.MapUsage(estimate, options?.ModelId) is { } usage ? inference.CreditCost(usage, entitlement) : 0;
+
+        return _options.CreditCost(AiUsageTracking.MapEvents(_options, estimate, options?.ModelId), entitlement);
     }
 
     /// <summary>
@@ -178,6 +205,12 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
 
         try
         {
+            if (_options.Inference is { } inference)
+            {
+                await SettleInferenceAsync(call, inference, usage, modelId);
+                return;
+            }
+
             IReadOnlyList<SchematicAiUsageEvent> events = usage is null ? [] : AiUsageTracking.MapEvents(_options, usage, modelId);
 
             if (call.Hold is null)
@@ -205,6 +238,50 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
         {
             if (call.Hold is not null)
                 await ReleaseQuietlyAsync(call.Hold.Lease.Id);
+        }
+    }
+
+    /// <summary>Sends one inference event, against the lease when one was taken. The caller releases the hold.</summary>
+    private async ValueTask SettleInferenceAsync(CallState call, SchematicInferenceOptions inference, UsageDetails? usage, string? modelId)
+    {
+        if (usage is null)
+            return;
+
+        if (call.EventName is null)
+        {
+            _logger.LogWarning(
+                "No inference event name for flag '{FlagKey}': set Inference.EventName or give the feature an event subtype. Usage is not tracked.",
+                _flagKey);
+            return;
+        }
+
+        var mapped = inference.MapUsage(usage, modelId);
+        var body = AiInferenceTracking.CreateEvent(call.EventName, call.Context, mapped, _models!, call.RequestModel, modelId);
+        if (body is null)
+            return;
+
+        if (call.Hold is null)
+        {
+            AiInferenceTracking.TrackBuffered(_schematic, body);
+            return;
+        }
+
+        var cost = inference.CreditCost(mapped!, call.Hold.Entitlement);
+        if (cost > call.Hold.Lease.GrantedAmount)
+            await ExtendQuietlyAsync(call.Hold.Lease.Id, cost - call.Hold.Lease.GrantedAmount);
+
+        var idempotencyKey = AiInferenceTracking.NewIdempotencyKey();
+        try
+        {
+            await _schematic.TrackInferenceAgainstLeaseAsync(call.Hold.Lease.Id, body, idempotencyKey, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            // Same key, so the fallback is dropped if the first send reached Schematic after all.
+            _logger.LogError(ex,
+                "Sending inference event '{EventName}' against Schematic lease {LeaseId} failed; sending without the lease.",
+                call.EventName, call.Hold.Lease.Id);
+            _schematic.TrackInference(body, new TrackOptions { IdempotencyKey = idempotencyKey });
         }
     }
 
@@ -255,5 +332,10 @@ public sealed class SchematicCreditLeaseChatClient : DelegatingChatClient
 
     private sealed record Hold(SchematicCreditLease Lease, RulesengineFeatureEntitlement Entitlement);
 
-    private sealed record CallState(SchematicFlagContext Context, Hold? Hold);
+    /// <summary><see cref="RequestModel"/> and <see cref="EventName"/> are set only for inference events.</summary>
+    private sealed record CallState(
+        SchematicFlagContext Context,
+        Hold? Hold,
+        string? RequestModel = null,
+        string? EventName = null);
 }

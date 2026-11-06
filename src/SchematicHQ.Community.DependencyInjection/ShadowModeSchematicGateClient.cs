@@ -6,7 +6,7 @@ namespace SchematicHQ.Community.DependencyInjection;
 
 /// <summary>
 /// Decorates an <see cref="ISchematicGateClient"/> so every denied entitlement check is logged as a warning
-/// and answered as allowed. Track, Identify and credit leases pass straight through. Registered by
+/// and answered as allowed. Track, inference events, Identify and credit leases pass straight through. Registered by
 /// <c>AddSchematicShadowMode</c> for the rollout window in which gating is wired but not yet enforced.
 /// </summary>
 public sealed class ShadowModeSchematicGateClient : ISchematicGateClient
@@ -101,4 +101,14 @@ public sealed class ShadowModeSchematicGateClient : ISchematicGateClient
         long quantity,
         CancellationToken cancellationToken)
         => _inner.TrackAgainstLeaseAsync(leaseId, eventName, company, user, traits, quantity, cancellationToken);
+
+    public void TrackInference(EventBodyInference body, TrackOptions? options = null)
+        => _inner.TrackInference(body, options);
+
+    public Task TrackInferenceAgainstLeaseAsync(
+        string leaseId,
+        EventBodyInference body,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
+        => _inner.TrackInferenceAgainstLeaseAsync(leaseId, body, idempotencyKey, cancellationToken);
 }

@@ -33,4 +33,19 @@ internal sealed class SchematicClientLifetimeTests
 
         await sp.DisposeAsync();
     }
+
+    [Test]
+    public async Task Gate_client_resolves_with_the_inference_buffer_and_provider_disposal_completes()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSchematic("test-api-key");
+
+        var sp = services.BuildServiceProvider();
+        sp.GetRequiredService<ISchematicGateClient>().ShouldBeOfType<SchematicGateClient>();
+        sp.GetRequiredService<SchematicInferenceEventBuffer>()
+            .ShouldBeSameAs(sp.GetRequiredService<SchematicInferenceEventBuffer>());
+
+        await sp.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
+    }
 }

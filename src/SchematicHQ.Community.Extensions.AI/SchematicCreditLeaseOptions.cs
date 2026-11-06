@@ -22,7 +22,8 @@ public sealed class SchematicCreditLeaseOptions : SchematicAiOptions
     /// Converts the events <see cref="SchematicAiOptions.MapUsage"/> produced into a credit amount for the
     /// gated entitlement. Defaults to the sum of every event's quantity times the entitlement's
     /// <see cref="RulesengineFeatureEntitlement.ConsumptionRate"/>. Override when input and output tokens
-    /// burn at different rates, keying off <see cref="SchematicAiUsageEvent.EventName"/>.
+    /// burn at different rates, keying off <see cref="SchematicAiUsageEvent.EventName"/>. Not used when
+    /// <see cref="SchematicAiOptions.Inference"/> is set; that uses <see cref="SchematicInferenceOptions.CreditCost"/>.
     /// </summary>
     public Func<IReadOnlyList<SchematicAiUsageEvent>, RulesengineFeatureEntitlement, double> CreditCost { get; set; }
         = DefaultCreditCost;

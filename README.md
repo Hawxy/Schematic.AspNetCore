@@ -210,7 +210,38 @@ By default, track events take  `ai.input-tokens` and `ai.output-tokens` as an in
 
 Anything the provider reports in `UsageDetails.AdditionalCounts` (such as cache reads and writes or reasoning tokens) is passed through as `ai.{key}` with the key normalised to kebab-case, so a Bedrock response carrying `cache_read_input_tokens` also emits `ai.cache-read-input-tokens`. Check your provider's docs before adding them to the input count, because whether they are already inside `InputTokenCount` differs by provider (Anthropic reports cache buckets alongside it, OpenAI counts cached tokens within it).
 
-Implementation note: Metering token counts directly works when a feature's price is per token. To meter against **credits** instead, set the entitlement's `priceBehavior` to `credit_burndown` and give each event its own `creditConsumptionRate`. Input and output tokens can burn the same credit at different rates, which keeps the price ratio between them in Schematic rather than hard-coded in a custom `MapUsage`.
+Implementation note: Metering token counts directly works when a feature's price is per token. To meter against **credits** instead, set the entitlement's `priceBehavior` to `credit_burndown` and give each event its own `creditConsumptionRate`. Input and output tokens can burn the same credit at different rates, which keeps the price ratio between them in Schematic rather than hard-coded in a custom `MapUsage`. For per-token credit pricing in one feature, use inference events (below).
+
+### Inference pricing
+
+Set `options.Inference` to send each model call as one Schematic [inference event](https://docs.schematichq.com/billing/inference-pricing) instead of Track events. Schematic burns credits at the per-token rates set on the plan entitlement (input, output, cached input, cache creation, reasoning, and per-model overrides), and records what each call cost from its list prices:
+
+```csharp
+builder.Services.AddChatClient(sp => /* provider client */)
+    .UseSchematicUsageTracking(o => o.Inference = new()
+    {
+        EventName = "support-chat",                      // the inference feature's event name
+        // Provider = "anthropic",                       // default: the client's ChatClientMetadata.ProviderName
+        // MapUsage = SchematicInferenceOptions.BucketedCacheUsageMapping,
+    });
+```
+
+Each event carries the company and user, `provider`, `request_model` (`ChatOptions.ModelId`, else the client's default model), `response_model` (`ChatResponse.ModelId`), the token counts and a fresh idempotency key. Events are queued and sent in batches in the background; pending events are flushed when the service provider is disposed. A call that reported no tokens sends nothing.
+
+- **Token counts.** The default mapping follows the Microsoft.Extensions.AI convention, which matches Schematic's: `InputTokenCount` includes `CachedInputTokenCount`, and `OutputTokenCount` includes `ReasoningTokenCount`. Adapters that pass the Anthropic Messages API counts through report cache reads and writes beside the input count instead; use `BucketedCacheUsageMapping` for those, which adds them back in, or set your own `MapUsage`. Check what your adapter reports before choosing.
+- **Provider.** Schematic looks up list prices by provider and response model, and only prices Anthropic and OpenAI models. Set `Provider` when the client's name differs from the vendor's, such as `aws.bedrock` serving Anthropic models. To record your own cost, set `SchematicInferenceUsage.Cost` from `MapUsage`.
+- **Leases.** `UseSchematicCreditLease` takes the same option. It sizes the hold from the entitlement's `QuantityRates` and `ConsumptionRate` (`SchematicInferenceOptions.CreditCost`), sends one inference event against the lease, and takes the event name from the entitlement's event subtype unless `EventName` is set. Per-model rate overrides are applied by Schematic but are not visible to the hold estimate; a shortfall extends the lease before the event is sent.
+- **Placement with function calling.** `UseFunctionInvocation()` makes several model calls per request and sums their usage into the final response. Add the Schematic middleware after it, so it sits closer to the model and sends one event per model call:
+
+  ```csharp
+  .UseFunctionInvocation()
+  .UseSchematicUsageTracking(o => o.Inference = new() { EventName = "support-chat" })
+  ```
+
+  Placed before it, every tool-calling round trip is sent as one event: the token counts still add up, but a flat per-call `ConsumptionRate` is charged once instead of once per model call, and only the last call's model is reported.
+- **Double billing.** Send each call one way only: not through both inference and Track middlewares for the same feature, and not also through Schematic's OpenTelemetry ingestion.
+
+Inference events need a secret API key. The inference members of `ISchematicGateClient` have default implementations that throw `NotSupportedException`; a custom gate client must implement them.
 
 ### Reserving credits with a lease
 
@@ -342,7 +373,7 @@ fake.TrackCalls.ShouldBeEmpty();
 fake.Reset();                                        // between tests
 ```
 
-Every check is allowed until a test says otherwise. Checks, tracks, identifies and lease calls are recorded; credit leases are granted in full unless `RejectLease` or `ThrowOnAcquireLease` is set. `AddSchematicFake` replaces whatever gate client the application registered and also exposes the fake itself from DI. The fake is safe to share across the parallel tests of one host.
+Every check is allowed until a test says otherwise. Checks, tracks, inference events (`InferenceCalls`, `LeaseInferenceCalls`), identifies and lease calls are recorded; credit leases are granted in full unless `RejectLease` or `ThrowOnAcquireLease` is set. `AddSchematicFake` replaces whatever gate client the application registered and also exposes the fake itself from DI. The fake is safe to share across the parallel tests of one host.
 
 For environments with no API key at all — local development, CI, preview deployments — `AddSchematicNoOp()` registers a client that talks to nothing. `AddSchematic` rejects a missing key, and everything that takes `ISchematicGateClient` fails at resolve time without a stand-in. Branch on the key so that wiring stays unconditional and those code paths still execute off a key:
 
@@ -357,7 +388,7 @@ else
 builder.Services.AddSchematicAspNetCore();     // unchanged either way
 ```
 
-Track and Identify are discarded, and entitlement checks resolve `true` so gated features stay reachable — pass `AddSchematicNoOp(allowAll: false)` to assert denial paths instead. Because it opens every gate, branch on whether a key is *configured*, not on whether one failed to load: reaching this in production would entitle everybody. Call it instead of `AddSchematic`, never as well as — whichever registers first wins.
+Track, inference and Identify events are discarded, and entitlement checks resolve `true` so gated features stay reachable — pass `AddSchematicNoOp(allowAll: false)` to assert denial paths instead. Because it opens every gate, branch on whether a key is *configured*, not on whether one failed to load: reaching this in production would entitle everybody. Call it instead of `AddSchematic`, never as well as — whichever registers first wins.
 
 ## License
 
