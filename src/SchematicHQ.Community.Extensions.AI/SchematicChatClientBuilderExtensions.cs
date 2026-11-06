@@ -16,8 +16,9 @@ namespace SchematicHQ.Community.Extensions.AI;
 public static class SchematicChatClientBuilderExtensions
 {
     /// <summary>
-    /// Emits Schematic Track events for each response's token usage. Place after
-    /// <c>UseSchematicRequireFeature</c> so denied calls are not metered.
+    /// Emits Schematic Track events for each response's token usage, or one inference event per response when
+    /// <see cref="SchematicAiOptions.Inference"/> is set (its <see cref="SchematicInferenceOptions.EventName"/> is
+    /// then required). Place after <c>UseSchematicRequireFeature</c> so denied calls are not metered.
     /// </summary>
     public static ChatClientBuilder UseSchematicUsageTracking(
         this ChatClientBuilder builder,
@@ -56,7 +57,9 @@ public static class SchematicChatClientBuilderExtensions
     /// Gates model calls behind a credit-burndown entitlement and reserves the estimated credits with a
     /// lease before the model is invoked, then tracks the actual usage against the lease and releases
     /// the remainder. Replaces the <c>UseSchematicRequireFeature</c> + <c>UseSchematicUsageTracking</c>
-    /// pair for that flag; when the entitlement is not credit-based it behaves like that pair.
+    /// pair for that flag; when the entitlement is not credit-based it behaves like that pair. With
+    /// <see cref="SchematicAiOptions.Inference"/> set, the usage is sent as one inference event against the
+    /// lease, under the entitlement's event subtype unless <see cref="SchematicInferenceOptions.EventName"/> is set.
     /// </summary>
     public static ChatClientBuilder UseSchematicCreditLease(
         this ChatClientBuilder builder,

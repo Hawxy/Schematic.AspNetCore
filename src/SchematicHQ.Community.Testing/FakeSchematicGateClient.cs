@@ -9,7 +9,7 @@ namespace SchematicHQ.Community.Testing;
 /// <see cref="Deny"/> for a company-wide denial, <see cref="DenyForUser"/> to deny only when the check is made
 /// as a given user (so a scenario can deny its acting user while the administrator that seeds its data stays
 /// entitled), <see cref="RespondToCheck"/> to script the full response, <see cref="ThrowOnCheck"/> to stand in
-/// for an unreachable Schematic. Every call is recorded. Track and Identify are recorded and discarded; credit
+/// for an unreachable Schematic. Every call is recorded. Track, inference and Identify events are recorded and discarded; credit
 /// leases are granted in full unless <see cref="RejectLease"/> or <see cref="ThrowOnAcquireLease"/> is set.
 /// Safe to share across parallel tests within one host: all state is guarded by one lock.
 /// </summary>
@@ -44,6 +44,10 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
         Dictionary<string, object?> Traits,
         long Quantity);
 
+    public sealed record InferenceCall(EventBodyInference Body, TrackOptions? Options);
+
+    public sealed record LeaseInferenceCall(string LeaseId, EventBodyInference Body, string? IdempotencyKey);
+
     private const string UserIdKey = "id";
 
     private readonly object _lock = new();
@@ -56,6 +60,8 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
     private readonly List<ExtendLeaseCall> _extendLeaseCalls = [];
     private readonly List<string> _releasedLeases = [];
     private readonly List<LeaseTrackCall> _leaseTrackCalls = [];
+    private readonly List<InferenceCall> _inferenceCalls = [];
+    private readonly List<LeaseInferenceCall> _leaseInferenceCalls = [];
     private Func<string, CheckFlagWithEntitlementResponse>? _checkResponder;
     private int _leaseCounter;
 
@@ -80,6 +86,12 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
     /// <summary>Every Track sent against a lease, in order.</summary>
     public IReadOnlyList<LeaseTrackCall> LeaseTrackCalls => Snapshot(_leaseTrackCalls);
 
+    /// <summary>Every buffered inference event sent, in order.</summary>
+    public IReadOnlyList<InferenceCall> InferenceCalls => Snapshot(_inferenceCalls);
+
+    /// <summary>Every inference event sent against a lease, in order.</summary>
+    public IReadOnlyList<LeaseInferenceCall> LeaseInferenceCalls => Snapshot(_leaseInferenceCalls);
+
     /// <summary>When set, every check throws it after being recorded — an unreachable Schematic.</summary>
     public Exception? ThrowOnCheck { get; set; }
 
@@ -91,6 +103,12 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
 
     /// <summary>When set, every Track against a lease throws it.</summary>
     public Exception? ThrowOnLeaseTrack { get; set; }
+
+    /// <summary>When set, every buffered inference event throws it.</summary>
+    public Exception? ThrowOnInference { get; set; }
+
+    /// <summary>When set, every inference event against a lease throws it.</summary>
+    public Exception? ThrowOnLeaseInference { get; set; }
 
     /// <summary>When set, every lease request throws it after being recorded.</summary>
     public Exception? ThrowOnAcquireLease { get; set; }
@@ -148,6 +166,8 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
             ThrowOnTrack = null;
             ThrowOnIdentify = null;
             ThrowOnLeaseTrack = null;
+            ThrowOnInference = null;
+            ThrowOnLeaseInference = null;
             ThrowOnAcquireLease = null;
             RejectLease = false;
             _checkCalls.Clear();
@@ -157,6 +177,8 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
             _extendLeaseCalls.Clear();
             _releasedLeases.Clear();
             _leaseTrackCalls.Clear();
+            _inferenceCalls.Clear();
+            _leaseInferenceCalls.Clear();
         }
     }
 
@@ -270,6 +292,32 @@ public sealed class FakeSchematicGateClient : ISchematicGateClient
             if (ThrowOnLeaseTrack is { } failure)
                 throw failure;
             _leaseTrackCalls.Add(new LeaseTrackCall(leaseId, eventName, new(company), new(user), new(traits), quantity));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public void TrackInference(EventBodyInference body, TrackOptions? options = null)
+    {
+        lock (_lock)
+        {
+            if (ThrowOnInference is { } failure)
+                throw failure;
+            _inferenceCalls.Add(new InferenceCall(body with { }, options));
+        }
+    }
+
+    public Task TrackInferenceAgainstLeaseAsync(
+        string leaseId,
+        EventBodyInference body,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            if (ThrowOnLeaseInference is { } failure)
+                throw failure;
+            _leaseInferenceCalls.Add(new LeaseInferenceCall(leaseId, body with { LeaseId = leaseId }, idempotencyKey));
         }
 
         return Task.CompletedTask;

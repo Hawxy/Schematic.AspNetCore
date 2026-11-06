@@ -7,10 +7,12 @@ namespace SchematicHQ.Community.DependencyInjection;
 internal sealed class SchematicGateClient : ISchematicGateClient
 {
     private readonly SchematicClient _client;
+    private readonly SchematicInferenceEventBuffer _inferenceBuffer;
 
-    public SchematicGateClient(SchematicClient client)
+    public SchematicGateClient(SchematicClient client, SchematicInferenceEventBuffer inferenceBuffer)
     {
         _client = client;
+        _inferenceBuffer = inferenceBuffer;
     }
 
     // The SDK method does not accept a CancellationToken; WaitAsync at least stops awaiting
@@ -107,4 +109,27 @@ internal sealed class SchematicGateClient : ISchematicGateClient
             },
             cancellationToken: cancellationToken);
     }
+
+    public void TrackInference(EventBodyInference body, TrackOptions? options = null)
+        => _inferenceBuffer.Enqueue(CreateInferenceRequest(body, options?.IdempotencyKey, options));
+
+    public async Task TrackInferenceAgainstLeaseAsync(
+        string leaseId,
+        EventBodyInference body,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
+        => await _client.Events.CreateEventAsync(
+            CreateInferenceRequest(body with { LeaseId = leaseId }, idempotencyKey, options: null),
+            cancellationToken: cancellationToken);
+
+    private static CreateEventRequestBody CreateInferenceRequest(EventBodyInference body, string? idempotencyKey, TrackOptions? options)
+        => new()
+        {
+            EventType = EventType.Inference,
+            Body = body,
+            IdempotencyKey = idempotencyKey,
+            SentAt = options?.SentAt ?? DateTime.UtcNow,
+            TrustedClientClock = options?.TrustedClientClock,
+            Backfill = options?.Backfill,
+        };
 }

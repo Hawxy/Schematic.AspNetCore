@@ -35,6 +35,20 @@ internal static class CheckResponses
             },
         };
 
+    /// <summary>An allow backed by an inference feature's credit-burndown entitlement with per-token rates.</summary>
+    public static CheckFlagWithEntitlementResponse AllowWithInferenceRates(
+        string flag,
+        Dictionary<string, double> quantityRates,
+        double? consumptionRate = null,
+        string? eventSubtype = "support-chat")
+    {
+        var response = AllowWithCredits(flag, consumptionRate: 0);
+        response.Entitlement!.ConsumptionRate = consumptionRate;
+        response.Entitlement.QuantityRates = quantityRates;
+        response.Entitlement.EventSubtype = eventSubtype;
+        return response;
+    }
+
     /// <summary>The denial the rules engine issues when a credit-backed entitlement has nothing left.</summary>
     public static CheckFlagWithEntitlementResponse DenyForSpentCredits(string flag)
     {

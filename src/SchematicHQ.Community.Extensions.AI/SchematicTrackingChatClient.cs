@@ -8,7 +8,8 @@ namespace SchematicHQ.Community.Extensions.AI;
 
 /// <summary>
 /// Chat pipeline middleware that emits Schematic Track events for each response's token usage, mapped
-/// through <see cref="SchematicAiOptions.MapUsage"/>. For streaming responses, usage reported across
+/// through <see cref="SchematicAiOptions.MapUsage"/>, or one inference event per response when
+/// <see cref="SchematicAiOptions.Inference"/> is set. For streaming responses, usage reported across
 /// updates is aggregated and tracked when enumeration ends — including when the consumer abandons the
 /// stream. A tracking failure is logged and never fails the AI call.
 /// </summary>
@@ -18,6 +19,7 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
     private readonly SchematicAiOptions _options;
     private readonly ILogger<SchematicTrackingChatClient> _logger;
     private readonly IHttpContextAccessor? _httpContextAccessor;
+    private readonly AiInferenceModels? _models;
 
     public SchematicTrackingChatClient(
         IChatClient innerClient,
@@ -31,6 +33,13 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
         _schematic = schematic;
+        if (options.Inference is { } inference)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                inference.EventName, $"{nameof(SchematicAiOptions.Inference)}.{nameof(SchematicInferenceOptions.EventName)}");
+            _models = new AiInferenceModels(inference, innerClient.GetService<ChatClientMetadata>(), logger);
+        }
+
         _options = options;
         _logger = logger;
         _httpContextAccessor = httpContextAccessor;
@@ -42,7 +51,7 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
         CancellationToken cancellationToken = default)
     {
         var response = await base.GetResponseAsync(messages, options, cancellationToken);
-        await TrackUsageAsync(response.Usage, response.ModelId);
+        await TrackUsageAsync(response.Usage, response.ModelId, options);
         return response;
     }
 
@@ -62,11 +71,11 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
         }
         finally
         {
-            await TrackUsageAsync(usage.Usage, usage.ModelId);
+            await TrackUsageAsync(usage.Usage, usage.ModelId, options);
         }
     }
 
-    private async ValueTask TrackUsageAsync(UsageDetails? usage, string? modelId)
+    private async ValueTask TrackUsageAsync(UsageDetails? usage, string? modelId, ChatOptions? chatOptions)
     {
         if (usage is null)
             return;
@@ -77,6 +86,21 @@ public sealed class SchematicTrackingChatClient : DelegatingChatClient
             if (context is null)
             {
                 _logger.LogDebug("No Schematic identity resolved; AI usage not tracked.");
+                return;
+            }
+
+            if (_options.Inference is { } inference)
+            {
+                var body = AiInferenceTracking.CreateEvent(
+                    inference.EventName!,
+                    context,
+                    inference.MapUsage(usage, modelId),
+                    _models!,
+                    _models!.RequestModel(chatOptions),
+                    modelId);
+
+                if (body is not null)
+                    AiInferenceTracking.TrackBuffered(_schematic, body);
                 return;
             }
 

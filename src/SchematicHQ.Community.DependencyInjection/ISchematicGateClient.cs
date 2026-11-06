@@ -78,4 +78,24 @@ public interface ISchematicGateClient
         long quantity,
         CancellationToken cancellationToken)
         => throw new NotSupportedException($"{GetType().Name} does not support credit leases.");
+
+    /// <summary>
+    /// Buffered, fire-and-forget inference event send: one model call's token counts, which Schematic prices at
+    /// the feature's per-token rates. <paramref name="options"/> carries the idempotency key and sent-at; any
+    /// lease or reservation id on <paramref name="body"/> is sent as given. Custom implementations that do not
+    /// support inference events can leave the default, which throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    void TrackInference(EventBodyInference body, TrackOptions? options = null)
+        => throw new NotSupportedException($"{GetType().Name} does not support inference events.");
+
+    /// <summary>
+    /// Sends an inference event redeemed against a lease. Unlike <see cref="TrackInference"/> this is an
+    /// immediate API call, so the lease can be released once it returns.
+    /// </summary>
+    Task TrackInferenceAgainstLeaseAsync(
+        string leaseId,
+        EventBodyInference body,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException($"{GetType().Name} does not support inference events.");
 }

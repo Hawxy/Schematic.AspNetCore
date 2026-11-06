@@ -18,6 +18,13 @@ public class SchematicAiOptions
     public Func<UsageDetails, string?, IEnumerable<SchematicAiUsageEvent>> MapUsage { get; set; } = DefaultUsageMapping;
 
     /// <summary>
+    /// When set, the metering middlewares send each model call as one Schematic inference event, priced by
+    /// Schematic at the feature's per-token rates, and <see cref="MapUsage"/> is not used. When <c>null</c>
+    /// (the default), usage is sent as Track events.
+    /// </summary>
+    public SchematicInferenceOptions? Inference { get; set; }
+
+    /// <summary>
     /// Identity to attribute usage to when no HTTP request context is available (background jobs,
     /// hosted services). When <c>null</c> and no context can be resolved, tracking is skipped and
     /// gating denies the call.
@@ -94,7 +101,7 @@ public class SchematicAiOptions
     /// <c>cache-read-input-tokens</c> and an event name does not leak whichever casing the provider
     /// happened to pick.
     /// </summary>
-    private static string ToEventNameSuffix(string key)
+    internal static string ToEventNameSuffix(string key)
     {
         var builder = new StringBuilder(key.Length + 4);
         var previous = '\0';

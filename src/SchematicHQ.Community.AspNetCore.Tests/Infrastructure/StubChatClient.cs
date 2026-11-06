@@ -37,7 +37,11 @@ internal sealed class StubChatClient : IChatClient
         }
     }
 
-    public object? GetService(Type serviceType, object? serviceKey = null) => null;
+    /// <summary>Returned from <see cref="GetService"/> when set.</summary>
+    public ChatClientMetadata? Metadata { get; set; }
+
+    public object? GetService(Type serviceType, object? serviceKey = null)
+        => serviceType == typeof(ChatClientMetadata) ? Metadata : null;
 
     public void Dispose() { }
 }
