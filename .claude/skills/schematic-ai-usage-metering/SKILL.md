@@ -1,6 +1,6 @@
 ---
 name: schematic-ai-usage-metering
-description: Meter LLM usage into Schematic with inference pricing events and bill it as credit burndown at per-token rates. Use when adding AI usage tracking or billing to a product, setting up Schematic credits, inference features and entitlements for an AI feature, choosing per-token credit rates, verifying metered usage through the Schematic MCP, or wiring SchematicHQ.Community.Extensions.AI into a .NET Microsoft.Extensions.AI chat pipeline. Also covers the Track-event fallback (weighted tokens) for usage that is not token-priced.
+description: Meter LLM usage into Schematic with inference pricing events and bill it as credit burndown at per-token rates. Use when adding AI usage tracking or billing to a product, setting up Schematic credits, inference features and entitlements for an AI feature, choosing per-token credit rates, verifying metered usage through the Schematic MCP, sending inference events from any stack over the REST API or OpenTelemetry, or wiring SchematicHQ.Community.Extensions.AI into a .NET Microsoft.Extensions.AI chat pipeline. Also covers the Track-event fallback (weighted tokens) for usage that is not token-priced.
 ---
 
 # Metering AI usage with Schematic
@@ -10,11 +10,11 @@ letting Schematic convert that into credits the plan grants. It does not cover g
 
 **Use inference events.** One inference event per model call carries the raw token counts, provider and model, and
 Schematic prices each token type at rates set on the plan. Use Track events only in the cases listed in
-[1.8](#18-fallback-track-events).
+[1.9](#19-fallback-track-events).
 
 It has three parts:
 
-1. [Generic approach](#1-generic-approach): decisions, Schematic setup and implementation rules for any stack.
+1. [Generic approach](#1-generic-approach): decisions, Schematic setup, implementation rules and the REST API, for any stack.
 2. [Schematic MCP](#2-schematic-mcp): configuring and verifying the Schematic side from Claude Code.
 3. [.NET implementation](#3-net-implementation): `SchematicHQ.Community.*` packages with Microsoft.Extensions.AI.
 
@@ -34,7 +34,7 @@ Schematic's own guide: <https://docs.schematichq.com/billing/inference-pricing>.
 | Where prices live | Schematic: a rate per token type, with per-model overrides | One rate per event name; any input/output weighting lives in app config |
 | Prompt caching, reasoning | Priced separately by Schematic | The app has to fold them into the quantity |
 | Provider cost and margin | Recorded per event from list prices or your rate sheet | Not recorded |
-| Use when | The feature is priced by tokens | See [1.8](#18-fallback-track-events) |
+| Use when | The feature is priced by tokens | See [1.9](#19-fallback-track-events) |
 
 **Metered or gated.** Choose one per AI feature and write it down.
 
@@ -190,7 +190,73 @@ negotiated rates, add rate-sheet entries rather than computing cost in the app.
 - Environments with no API key (local dev, CI) use a no-op client. Decide by whether a key is *configured*, not by
   whether one failed to load, so a missing production secret fails loudly.
 
-### 1.6 Tests to write
+### 1.6 Sending the event from any stack
+
+Outside .NET there is no package for this, so write a small wrapper around the model client.
+[Part 3](#3-net-implementation) is one implementation of the same outline.
+
+1. **Wrap the model call in one place.** Use a client wrapper or middleware that every model call goes through, below
+   any tool-calling loop, so each model call is seen separately.
+2. **Resolve identity before the call.** Take the company and user from the request, or from what the job was given.
+   With no company, run the call and send nothing.
+3. **Read usage from the response.** For a stream, add up the usage chunks and take the total when the stream ends or
+   is abandoned. Map the counts as in [1.1](#11-decide-these-before-writing-code).
+4. **Build the event**: event name, provider, request and response model, token counts, a new idempotency key (a
+   UUID) and the time of the call.
+5. **Queue it and return.** Use a bounded in-memory queue and a background worker that posts batches on a short
+   interval and flushes on shutdown. When the queue is full, or a send still fails after the HTTP client's retries,
+   drop the events and log it. Never block or fail the model call. A retry reuses the event's idempotency key.
+6. **No API key configured.** Replace the sender with one that discards events.
+
+**REST API.** One event:
+
+```
+POST https://api.schematichq.com/events
+X-Schematic-Api-Key: <secret key>
+Content-Type: application/json
+```
+
+```json
+{
+  "event_type": "inference",
+  "idempotency_key": "3f2b8c1e-5d0a-4e7b-9c46-1a2d3e4f5a6b",
+  "sent_at": "2026-01-15T09:30:00Z",
+  "body": {
+    "event": "support-chat",
+    "company": { "id": "acme" },
+    "user": { "id": "user-42" },
+    "provider": "anthropic",
+    "request_model": "claude-sonnet-5-5",
+    "response_model": "claude-sonnet-5-5",
+    "input_tokens": 2667,
+    "cached_input_tokens": 2259,
+    "cache_creation_input_tokens": 404,
+    "output_tokens": 104
+  }
+}
+```
+
+`company`, `provider`, `response_model`, `input_tokens` and `output_tokens` are required, and `event` is required for
+the call to burn credits. Optional: `user`, `request_model`, the cache counts, `reasoning_tokens`, `requests` (default
+1), `cost` (a decimal string, with `currency`), `lease_id` and `reservation_id`. `company` and `user` are key maps;
+use the keys the company and user were identified with. Events with the same `idempotency_key` in one environment are
+dropped for 24 hours.
+
+For a batch, post `{ "events": [ ... ] }` to `https://api.schematichq.com/event-batch`. Each item has the shape above.
+
+**SDK.** Schematic's SDKs (Node.js, Python, Go, Java, Ruby, C#) wrap the same two endpoints. Use the SDK's
+event-creation call when its version has the `inference` event type; the `track` helper sends Track events.
+Otherwise call the REST API with any HTTP client.
+
+**OpenTelemetry.** When the app already emits GenAI spans (`gen_ai.*` attributes), Schematic can read the usage from
+them and no event code is needed. Export traces over OTLP/HTTP to `https://c.schematichq.com/v1/traces` with the
+`X-Schematic-Api-Key` header (a secret key), and set `schematic.company.<key>` and `schematic.event` on each
+model-call span, plus `schematic.user.<key>` when there is a user. The token counts are whatever the instrumentation
+reports, so check the cache counts on a real call, and enable only one instrumentation per provider or each call is
+billed twice. Do not carry these attributes in W3C baggage, which is forwarded to model providers. Details:
+<https://docs.schematichq.com/billing/inference-pricing-opentelemetry>.
+
+### 1.7 Tests to write
 
 - One AI call through the real pipeline records one inference event for the expected company and user.
 - The event name equals the Schematic feature's event subtype.
@@ -199,13 +265,13 @@ negotiated rates, add rate-sheet entries rather than computing cost in the app.
 - The provider and model values are the ones your rates are keyed on.
 - Zero or missing usage produces no event.
 
-### 1.7 Verifying in a live environment
+### 1.8 Verifying in a live environment
 
 After a real call, read the company's credit ledger in Schematic (see [MCP verification](#24-verifying-usage)). An
 inference drawdown is broken down per token type with quantity, rate and credits. Check it against the formula in
 [1.2](#12-the-schematic-side) and against the provider's own usage figures for the same call.
 
-### 1.8 Fallback: Track events
+### 1.9 Fallback: Track events
 
 Use Track events when one of these holds:
 
