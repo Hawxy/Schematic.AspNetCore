@@ -291,6 +291,12 @@ app.UseSchematicFeatureDeniedResponses();
 
 It is a middleware rather than an `IExceptionHandler` because `UseExceptionHandler` logs every exception at Error before consulting its handlers, so a denial answered with a 403 would still be logged as an error. `SchematicDenialResponse.WriteAsync` is public for apps that want to write their own handler.
 
+### Agent skill
+
+`SchematicHQ.Community.Extensions.AI` ships an [agent skill](https://agentskills.io/) for coding agents, `schematic-ai-usage-metering`, at `skills/schematic-ai-usage-metering/SKILL.md` inside the package. It covers the decisions, the Schematic setup and the pipeline wiring described above, and matches the package version it ships with.
+
+After a restore the file is in the NuGet global packages folder under `schematichq.community.extensions.ai/<version>/skills/`. Tools that read [skills from NuGet packages](https://devblogs.microsoft.com/dotnet/delivering-skills-in-nuget-packages/) pick it up from there: `dotnet-inspect package SchematicHQ.Community.Extensions.AI -S Skills` lists it, and `dotnet-package-skills install` copies it into the repo's `.agents/skills`. A copied skill is not updated when the package reference is; run the install again after upgrading.
+
 ## Gating and tracking Quartz jobs
 
 `SchematicHQ.Community.Extensions.Quartz` applies the same gate/track model to scheduled jobs:

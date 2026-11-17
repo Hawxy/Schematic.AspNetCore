@@ -13,6 +13,14 @@
       <PackageReference Include="Microsoft.Extensions.AI" />
     </ItemGroup>
 
+    <!-- Ships the repo's agent skill in the package at skills/<name>/SKILL.md, where package-skill tools look for it. -->
+    <ItemGroup>
+        <None Include="..\..\.claude\skills\schematic-ai-usage-metering\**"
+              Pack="true"
+              PackagePath="skills\schematic-ai-usage-metering\%(RecursiveDir)"
+              Visible="false" />
+    </ItemGroup>
+
     <Import Project="../../Package.Build.props" />
 
 </Project>
